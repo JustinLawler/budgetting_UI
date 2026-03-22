@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annual Budget Planner</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <style>
+        :root {
+            --float-warning-bg: #fee2e2;
+            --past-month-opacity: 0.7;
+            --current-month-bg: #dbeafe;
+            --current-month-border: #3b82f6;
+            --boundary-border: #94a3b8;
+            --positive-color: #16a34a;
+            --negative-color: #dc2626;
+            --amber-color: #d97706;
+        }
+
+        .settings-panel {
+            margin-bottom: 1rem;
+        }
+
+        .settings-panel summary {
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .settings-buttons {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .settings-buttons button {
+            margin: 0;
+            width: auto;
+        }
+
+        .token-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-end;
+        }
+
+        .token-row input {
+            flex: 1;
+        }
+
+        .token-row button {
+            margin: 0;
+            white-space: nowrap;
+            height: fit-content;
+        }
+
+        .test-result {
+            font-size: 0.85rem;
+            margin-top: 0.25rem;
+        }
+
+        .test-result.success { color: var(--positive-color); }
+        .test-result.error { color: var(--negative-color); }
+
+        .refresh-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .refresh-section button {
+            margin: 0;
+            width: auto;
+        }
+
+        .last-refreshed {
+            font-size: 0.85rem;
+            color: var(--pico-muted-color);
+        }
+
+        .status-bar {
+            flex: 1;
+            min-width: 200px;
+            padding: 0.5rem 1rem;
+            background: var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            font-size: 0.9rem;
+        }
+
+        .status-bar.error {
+            background: #fee2e2;
+            color: var(--negative-color);
+        }
+
+        .status-bar.success {
+            background: #dcfce7;
+            color: var(--positive-color);
+        }
+
+        /* Summary Cards */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .summary-card {
+            padding: 0.75rem 1rem;
+            background: var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+            text-align: center;
+        }
+
+        .summary-card .label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--pico-muted-color);
+            margin-bottom: 0.25rem;
+        }
+
+        .summary-card .value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .summary-card.warning {
+            background: var(--float-warning-bg);
+        }
+
+        .summary-card.healthy {
+            background: #dcfce7;
+        }
+
+        /* Table Header Actions */
+        .table-header {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 0.5rem;
+        }
+
+        .table-header button {
+            margin: 0;
+            width: auto;
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .budget-table {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        .budget-table th {
+            text-align: right;
+            font-size: 0.85rem;
+        }
+
+        .budget-table th:first-child {
+            text-align: left;
+        }
+
+        .budget-table th small {
+            display: block;
+            font-weight: normal;
+            color: var(--pico-muted-color);
+            font-size: 0.75rem;
+        }
+
+        .budget-table td {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .budget-table td:first-child {
+            text-align: left;
+        }
+
+        .budget-table tr.past-month {
+            opacity: var(--past-month-opacity);
+        }
+
+        .budget-table tr.current-month {
+            background: var(--current-month-bg);
+            border-left: 3px solid var(--current-month-border);
+        }
+
+        .budget-table tr.boundary-row td {
+            border-top: 2px solid var(--boundary-border);
+        }
+
+        .budget-table tr.float-warning {
+            background: var(--float-warning-bg) !important;
+        }
+
+        .budget-table tr.float-warning .closing-balance {
+            font-weight: bold;
+            color: var(--negative-color);
+        }
+
+        .negative {
+            color: var(--negative-color);
+        }
+
+        .positive {
+            color: var(--positive-color);
+        }
+
+        .amber {
+            color: var(--amber-color);
+        }
+
+        .missing-settings {
+            padding: 2rem;
+            text-align: center;
+            background: var(--pico-muted-border-color);
+            border-radius: var(--pico-border-radius);
+        }
+
+        .missing-settings button {
+            margin-top: 1rem;
+        }
+
+        .no-data {
+            color: var(--pico-muted-color);
+        }
+
+        .warnings-panel {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: var(--pico-border-radius);
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .warnings-panel summary {
+            cursor: pointer;
+            font-weight: 600;
+            color: #b45309;
+        }
+
+        .warnings-panel ul {
+            margin: 0.5rem 0 0 0;
+            padding-left: 1.5rem;
+        }
+
+        .warnings-panel li {
+            margin: 0.25rem 0;
+            color: #92400e;
+        }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <h1>Annual Budget Planner</h1>
+
+        <!-- Settings Panel -->
+        <details class="settings-panel" id="settingsPanel">
+            <summary>Settings</summary>
+            <div class="settings-grid">
+                <div>
+                    <label>YNAB API Token</label>
+                    <div class="token-row">
+                        <input type="password" id="apiToken" placeholder="Your YNAB API token">
+                        <button type="button" id="testConnectionBtn" class="outline">Test</button>
+                    </div>
+                    <div id="testResult" class="test-result"></div>
+                </div>
+                <label>
+                    YNAB Budget ID
+                    <input type="text" id="budgetId" placeholder="Budget ID">
+                </label>
+                <label>
+                    Float Threshold (€)
+                    <input type="number" id="floatThreshold" placeholder="e.g. 6500" value="6500">
+                </label>
+                <label>
+                    December Closing Balance (€)
+                    <input type="number" id="decemberBalance" placeholder="Carry-in to January">
+                </label>
+                <label>
+                    Flexible Expense Emoji Prefix
+                    <input type="text" id="flexiblePrefix" placeholder="e.g. 🔵" value="🔵">
+                </label>
+            </div>
+            <div class="settings-buttons">
+                <button id="saveSettingsBtn">Save Settings</button>
+            </div>
+        </details>
+
+        <!-- Refresh Section -->
+        <div class="refresh-section">
+            <button id="refreshBtn" class="contrast">Refresh Data</button>
+            <span id="lastRefreshed" class="last-refreshed"></span>
+            <div class="status-bar" id="statusBar">Configure settings and click Refresh to load data</div>
+        </div>
+
+        <!-- Summary Cards (hidden until data loads) -->
+        <div id="summaryCards" class="summary-cards" style="display: none;"></div>
+
+        <!-- Warnings Panel (hidden until warnings exist) -->
+        <div id="warningsPanel" class="warnings-panel" style="display: none;"></div>
+
+        <!-- Table Container -->
+        <div id="tableContainer">
+            <div class="missing-settings" id="missingSettingsMsg">
+                <p>Please complete your settings above to get started.</p>
+                <p>You'll need your YNAB API token and Budget ID.</p>
+                <button type="button" id="openSettingsBtn" class="outline">Open Settings</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+    // ============================================================
+    // SETTINGS MANAGEMENT
+    // ============================================================
+
+    function loadSettings() {
+        return {
+            apiToken: localStorage.getItem('ynab_apiToken') || '',
+            budgetId: localStorage.getItem('ynab_budgetId') || '',
+            floatThreshold: parseFloat(localStorage.getItem('ynab_floatThreshold')) || 6500,
+            decemberBalance: parseFloat(localStorage.getItem('ynab_decemberBalance')) || 0,
+            flexiblePrefix: localStorage.getItem('ynab_flexiblePrefix') || '🔵'
+        };
+    }
+
+    function saveSettings() {
+        localStorage.setItem('ynab_apiToken', document.getElementById('apiToken').value.trim());
+        localStorage.setItem('ynab_budgetId', document.getElementById('budgetId').value.trim());
+        localStorage.setItem('ynab_floatThreshold', document.getElementById('floatThreshold').value);
+        localStorage.setItem('ynab_decemberBalance', document.getElementById('decemberBalance').value);
+        localStorage.setItem('ynab_flexiblePrefix', document.getElementById('flexiblePrefix').value);
+
+        updateStatus('Settings saved!', 'success');
+        checkSettingsComplete();
+
+        // Auto-collapse settings panel after saving
+        document.getElementById('settingsPanel').removeAttribute('open');
+    }
+
+    function populateSettingsForm() {
+        const settings = loadSettings();
+        document.getElementById('apiToken').value = settings.apiToken;
+        document.getElementById('budgetId').value = settings.budgetId;
+        document.getElementById('floatThreshold').value = settings.floatThreshold;
+        document.getElementById('decemberBalance').value = settings.decemberBalance;
+        document.getElementById('flexiblePrefix').value = settings.flexiblePrefix;
+
+        // Collapse settings panel if settings are already saved
+        if (settings.apiToken && settings.budgetId) {
+            document.getElementById('settingsPanel').removeAttribute('open');
+        } else {
+            document.getElementById('settingsPanel').setAttribute('open', '');
+        }
+    }
+
+    function checkSettingsComplete() {
+        const settings = loadSettings();
+        const isComplete = settings.apiToken && settings.budgetId;
+
+        document.getElementById('missingSettingsMsg').style.display = isComplete ? 'none' : 'block';
+        document.getElementById('refreshBtn').disabled = !isComplete;
+
+        return isComplete;
+    }
+
+    // ============================================================
+    // YNAB API CALLS
+    // ============================================================
+
+    const YNAB_BASE_URL = 'https://api.ynab.com/v1';
+
+    // Custom error class for specific YNAB API errors
+    class YnabApiError extends Error {
+        constructor(message, type) {
+            super(message);
+            this.type = type;
+        }
+    }
+
+    // Parse YNAB API error responses and throw appropriate errors
+    function handleApiError(response, errorData) {
+        const status = response.status;
+        const detail = errorData?.error?.detail || 'Unknown error';
+
+        if (status === 401) {
+            throw new YnabApiError('Invalid API token — please check settings', 'auth');
+        }
+        if (status === 404) {
+            throw new YnabApiError('Budget not found — please check your Budget ID in settings', 'not_found');
+        }
+        if (status === 429) {
+            throw new YnabApiError('Rate limit reached — please wait a moment and refresh again', 'rate_limit');
+        }
+        throw new YnabApiError(detail, 'unknown');
+    }
+
+    // Test the API connection by fetching budgets list
+    async function testConnection() {
+        const apiToken = document.getElementById('apiToken').value.trim();
+        const testResult = document.getElementById('testResult');
+
+        if (!apiToken) {
+            testResult.textContent = 'Please enter an API token first';
+            testResult.className = 'test-result error';
+            return;
+        }
+
+        testResult.textContent = 'Testing...';
+        testResult.className = 'test-result';
+
+        try {
+            const response = await fetch(`${YNAB_BASE_URL}/budgets`, {
+                headers: {
+                    'Authorization': `Bearer ${apiToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                handleApiError(response, errorData);
+            }
+
+            const data = await response.json();
+            const budgetCount = data.data.budgets.length;
+            testResult.textContent = `✓ Connected — found ${budgetCount} budget${budgetCount !== 1 ? 's' : ''}`;
+            testResult.className = 'test-result success';
+        } catch (error) {
+            testResult.textContent = error.message || 'Connection failed';
+            testResult.className = 'test-result error';
+        }
+    }
+
+    async function fetchYnabData(settings) {
+        const headers = {
+            'Authorization': `Bearer ${settings.apiToken}`,
+            'Content-Type': 'application/json'
+        };
+
+        const currentYear = new Date().getFullYear();
+
+        // First, fetch transactions and scheduled transactions in parallel
+        const [transactionsResponse, scheduledResponse] = await Promise.all([
+            fetch(`${YNAB_BASE_URL}/budgets/${settings.budgetId}/transactions?since_date=${currentYear}-01-01`, { headers }),
+            fetch(`${YNAB_BASE_URL}/budgets/${settings.budgetId}/scheduled_transactions`, { headers })
+        ]);
+
+        // Check for errors
+        for (const [name, response] of [['transactions', transactionsResponse], ['scheduled', scheduledResponse]]) {
+            if (!response.ok) {
+                const errorData = await response.json();
+                handleApiError(response, errorData);
+            }
+        }
+
+        const transactionsData = await transactionsResponse.json();
+        const scheduledData = await scheduledResponse.json();
+
+        // Fetch each month individually to get category details
+        // The /months endpoint only returns summary data without categories
+        // We need /months/{month} for each month to get category budgeted/activity data
+        const monthPromises = [];
+        for (let month = 1; month <= 12; month++) {
+            const monthStr = `${currentYear}-${String(month).padStart(2, '0')}-01`;
+            monthPromises.push(
+                fetch(`${YNAB_BASE_URL}/budgets/${settings.budgetId}/months/${monthStr}`, { headers })
+                    .then(async (response) => {
+                        if (!response.ok) {
+                            // Month might not exist yet (future months), return null
+                            if (response.status === 404) {
+                                return null;
+                            }
+                            const errorData = await response.json();
+                            handleApiError(response, errorData);
+                        }
+                        return response.json();
+                    })
+                    .then(data => data ? data.data.month : null)
+                    .catch(() => null) // Gracefully handle any errors for individual months
+            );
+        }
+
+        const monthsData = await Promise.all(monthPromises);
+        const currentYearMonths = monthsData.filter(m => m !== null);
+
+        return {
+            months: currentYearMonths,
+            transactions: transactionsData.data.transactions,
+            scheduledTransactions: scheduledData.data.scheduled_transactions
+        };
+    }
+
+    // ============================================================
+    // DEBUG FUNCTIONS (call from browser console)
+    // ============================================================
+
+    // Store last fetched data for debugging
+    let _debugData = null;
+
+    // Call this from browser console: debugMonth('2026-01-01')
+    // Shows all categories and their budgeted amounts for a specific month
+    window.debugMonth = function(monthStr) {
+        if (!_debugData) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+
+        const month = _debugData.months.find(m => m.month === monthStr);
+        if (!month) {
+            console.log(`Month ${monthStr} not found. Available months:`, _debugData.months.map(m => m.month));
+            return;
+        }
+
+        const settings = loadSettings();
+        console.log(`\n=== ${monthStr} ===`);
+        console.log(`Flexible prefix: "${settings.flexiblePrefix}"`);
+
+        let totalBudgeted = 0;
+        let totalActivity = 0;
+
+        const categories = month.categories || [];
+        console.log(`\nAll categories (${categories.length}):\n`);
+
+        // Group by category group
+        const grouped = {};
+        for (const cat of categories) {
+            const group = cat.category_group_name || 'Ungrouped';
+            if (!grouped[group]) grouped[group] = [];
+            grouped[group].push(cat);
+        }
+
+        for (const [groupName, cats] of Object.entries(grouped)) {
+            console.log(`\n--- ${groupName} ---`);
+            for (const cat of cats) {
+                const budgeted = (cat.budgeted || 0) / 1000;
+                const activity = (cat.activity || 0) / 1000;
+                const isFlexible = cat.name.startsWith(settings.flexiblePrefix);
+                const hidden = cat.hidden ? ' [HIDDEN]' : '';
+                const deleted = cat.deleted ? ' [DELETED]' : '';
+
+                console.log(`  ${isFlexible ? '🔵' : '  '} ${cat.name}${hidden}${deleted}: budgeted=${budgeted.toFixed(2)}, activity=${activity.toFixed(2)}`);
+
+                totalBudgeted += budgeted;
+                totalActivity += activity;
+            }
+        }
+
+        console.log(`\n=== TOTALS ===`);
+        console.log(`Total Budgeted (all categories): €${totalBudgeted.toFixed(2)}`);
+        console.log(`Total Activity (all categories): €${totalActivity.toFixed(2)}`);
+
+        // Also show what we're currently calculating
+        const fixedBudgeted = categories
+            .filter(cat => !cat.name.startsWith(settings.flexiblePrefix))
+            .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
+
+        const flexibleBudgeted = categories
+            .filter(cat => cat.name.startsWith(settings.flexiblePrefix))
+            .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
+
+        const flexibleActivity = categories
+            .filter(cat => cat.name.startsWith(settings.flexiblePrefix))
+            .reduce((sum, cat) => sum + Math.abs(cat.activity || 0), 0) / 1000;
+
+        console.log(`\n=== CURRENT APP CALCULATION ===`);
+        console.log(`Fixed (budgeted, non-flexible): €${fixedBudgeted.toFixed(2)}`);
+        console.log(`Flexible (activity, flexible): €${flexibleActivity.toFixed(2)}`);
+        console.log(`App Total Assigned: €${(fixedBudgeted + flexibleActivity).toFixed(2)}`);
+
+        console.log(`\n=== CORRECT "ASSIGNED" SHOULD BE ===`);
+        console.log(`Fixed (budgeted): €${fixedBudgeted.toFixed(2)}`);
+        console.log(`Flexible (budgeted): €${flexibleBudgeted.toFixed(2)}`);
+        console.log(`True Total Assigned: €${(fixedBudgeted + flexibleBudgeted).toFixed(2)}`);
+    };
+
+    // ============================================================
+    // SCHEDULED TRANSACTION EXPANSION
+    // ============================================================
+
+    // Expand scheduled transactions to all their occurrences within the current year
+    // Returns { expanded: [...], warnings: [...] }
+    // Supports: "never" (one-off), "monthly" (recurring)
+    // Other frequencies generate a warning and are skipped
+    function expandScheduledTransactions(scheduledTransactions, currentYear) {
+        const expanded = [];
+        const warnings = [];
+        const seenWarnings = new Set(); // Avoid duplicate warnings
+
+        for (const t of scheduledTransactions) {
+            const frequency = t.frequency || 'never';
+            const dateNext = new Date(t.date_next);
+
+            // Skip if date_next is not in current year or later
+            if (dateNext.getFullYear() > currentYear) {
+                continue;
+            }
+
+            if (frequency === 'never') {
+                // One-off transaction: include if it falls in current year
+                if (dateNext.getFullYear() === currentYear) {
+                    expanded.push({
+                        ...t,
+                        occurrence_month: dateNext.getMonth(),
+                        occurrence_year: currentYear
+                    });
+                }
+            } else if (frequency === 'monthly') {
+                // Monthly recurring: generate occurrences from date_next through December
+                // Start from the month of date_next (or January if date_next is from previous year)
+                let startMonth = dateNext.getFullYear() < currentYear ? 0 : dateNext.getMonth();
+
+                for (let month = startMonth; month < 12; month++) {
+                    expanded.push({
+                        ...t,
+                        occurrence_month: month,
+                        occurrence_year: currentYear
+                    });
+                }
+            } else {
+                // Unsupported frequency - log warning (once per transaction)
+                const warningKey = `${t.id}-${frequency}`;
+                if (!seenWarnings.has(warningKey)) {
+                    seenWarnings.add(warningKey);
+                    const payee = t.payee_name || 'Unknown payee';
+                    const amount = Math.abs(t.amount / 1000).toFixed(0);
+                    warnings.push(`Unsupported frequency "${frequency}" for scheduled transaction: ${payee} (€${amount}) — skipped`);
+                }
+            }
+        }
+
+        return { expanded, warnings };
+    }
+
+    // ============================================================
+    // MONTHLY CALCULATIONS
+    // ============================================================
+
+    function calculateMonthlyRows(data, settings) {
+        const currentYear = new Date().getFullYear();
+        const today = new Date();
+
+        // Determine the boundary: last day of previous month
+        // Any month before the current month is considered "past"
+        const currentMonthIndex = today.getMonth(); // 0 = January
+
+        const rows = [];
+        let priorClosingBalance = settings.decemberBalance;
+
+        // Track the most recent past month's fixed expense total and its name for projecting future months
+        let lastKnownFixedExpenses = 0;
+        let lastKnownFixedSourceMonth = 'December';
+
+        // Month names for tooltip display
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+
+        // --------------------------------------------------------
+        // EXPAND SCHEDULED TRANSACTIONS
+        // Handles monthly recurring transactions by generating occurrences
+        // for each month. One-off transactions use their date_next.
+        // Unsupported frequencies generate warnings.
+        // --------------------------------------------------------
+        const { expanded: expandedTransactions, warnings } =
+            expandScheduledTransactions(data.scheduledTransactions, currentYear);
+
+        // Store warnings for later display
+        data._warnings = warnings;
+
+        // First pass: calculate last known fixed expenses from past months
+        for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+            if (monthIndex >= currentMonthIndex) break;
+
+            const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+            const ynabMonth = data.months.find(m => m.month === monthStr);
+
+            if (ynabMonth && ynabMonth.categories) {
+                // Sum budgeted amounts for fixed categories (those NOT starting with flexible prefix)
+                const fixedTotal = ynabMonth.categories
+                    .filter(cat => !cat.name.startsWith(settings.flexiblePrefix))
+                    .reduce((sum, cat) => sum + (cat.budgeted || 0), 0);
+
+                lastKnownFixedExpenses = fixedTotal / 1000; // Convert from milliunits
+                lastKnownFixedSourceMonth = monthNames[monthIndex];
+            }
+        }
+
+        // Second pass: calculate all monthly rows
+        for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+            const monthDate = new Date(currentYear, monthIndex, 1);
+            const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+            const isPast = monthIndex < currentMonthIndex;
+            const isCurrent = monthIndex === currentMonthIndex;
+            // Mark the first non-past row as the boundary row for visual separator
+            const isBoundaryRow = monthIndex === currentMonthIndex && currentMonthIndex > 0;
+
+            const ynabMonth = data.months.find(m => m.month === monthStr);
+            // Track if this month has data in YNAB
+            const hasMonthData = ynabMonth && ynabMonth.categories && ynabMonth.categories.length > 0;
+
+            // --------------------------------------------------------
+            // INCOME CALCULATION
+            // Past months: use YNAB's actual income field
+            // Current/future months: sum scheduled transactions with positive amounts
+            // Uses expanded transactions to handle monthly recurring income
+            // --------------------------------------------------------
+            let income = 0;
+            let incomeTooltip = '';
+            if (isPast) {
+                income = ynabMonth ? ynabMonth.income / 1000 : 0;
+                incomeTooltip = 'Actual YNAB income';
+            } else {
+                // Sum scheduled income (positive amounts) for this month
+                // Uses pre-expanded transactions which include all monthly occurrences
+                income = expandedTransactions
+                    .filter(t => {
+                        return t.occurrence_month === monthIndex &&
+                               t.occurrence_year === currentYear &&
+                               t.amount > 0;
+                    })
+                    .reduce((sum, t) => sum + t.amount, 0) / 1000;
+                incomeTooltip = 'Estimated from scheduled transactions';
+            }
+
+            // --------------------------------------------------------
+            // FIXED EXPENSES CALCULATION
+            // Fixed categories = those NOT starting with the flexible emoji prefix
+            // Past: sum of budgeted amounts for fixed categories
+            // Current: use current budgeted if > 0, else prior month
+            // Future: use most recent past month's fixed total
+            // Handle missing month data gracefully
+            // --------------------------------------------------------
+            let fixedExpenses = 0;
+            let fixedTooltip = '';
+            let fixedHasData = true;
+
+            if (isPast && hasMonthData) {
+                fixedExpenses = ynabMonth.categories
+                    .filter(cat => !cat.name.startsWith(settings.flexiblePrefix))
+                    .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
+
+                // Update last known for future projections
+                lastKnownFixedExpenses = fixedExpenses;
+                lastKnownFixedSourceMonth = monthNames[monthIndex];
+                fixedTooltip = 'Actual budgeted amount';
+            } else if (isPast && !hasMonthData) {
+                // Missing past month data - carry forward prior balance unchanged
+                fixedExpenses = 0;
+                fixedHasData = false;
+                fixedTooltip = 'No budget data for this month';
+            } else if (isCurrent && hasMonthData) {
+                // Check if current month has budgeted amounts
+                const currentFixed = ynabMonth.categories
+                    .filter(cat => !cat.name.startsWith(settings.flexiblePrefix))
+                    .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
+
+                if (currentFixed > 0) {
+                    fixedExpenses = currentFixed;
+                    fixedTooltip = 'Actual budgeted amount';
+                } else {
+                    fixedExpenses = lastKnownFixedExpenses;
+                    fixedTooltip = `Based on ${lastKnownFixedSourceMonth}'s budgeted amount`;
+                }
+            } else {
+                // Future months: use last known fixed expenses
+                fixedExpenses = lastKnownFixedExpenses;
+                fixedTooltip = `Based on ${lastKnownFixedSourceMonth}'s budgeted amount`;
+            }
+
+            // --------------------------------------------------------
+            // FLEXIBLE EXPENSES CALCULATION
+            // Flexible categories = those starting with the flexible emoji prefix
+            // Past: sum of budgeted amounts (assigned) for flexible categories
+            // Current/future: sum scheduled transactions for flexible categories
+            // Skip transactions without a category assigned (graceful handling)
+            // --------------------------------------------------------
+            let flexibleExpenses = 0;
+            let flexibleHasData = true;
+
+            if (isPast && hasMonthData) {
+                // Sum budgeted amounts for flexible categories (same as fixed - use assigned, not activity)
+                flexibleExpenses = ynabMonth.categories
+                    .filter(cat => cat.name.startsWith(settings.flexiblePrefix))
+                    .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
+            } else if (isPast && !hasMonthData) {
+                flexibleExpenses = 0;
+                flexibleHasData = false;
+            } else {
+                // Sum scheduled flexible expenses for this month
+                // Uses pre-expanded transactions to handle monthly recurring expenses
+                // Skip transactions without a category (t.category_name check)
+                flexibleExpenses = expandedTransactions
+                    .filter(t => {
+                        return t.occurrence_month === monthIndex &&
+                               t.occurrence_year === currentYear &&
+                               t.category_name &&
+                               t.category_name.startsWith(settings.flexiblePrefix);
+                    })
+                    .reduce((sum, t) => sum + Math.abs(t.amount), 0) / 1000;
+            }
+
+            // --------------------------------------------------------
+            // AVAILABLE TO BUDGET
+            // = prior month's closing balance + this month's income
+            // For January: prior = December Closing Balance from settings
+            // --------------------------------------------------------
+            const availableToBudget = priorClosingBalance + income;
+            const availableTooltip = `Prior closing balance (€${formatNumber(priorClosingBalance)}) + this month's income (€${formatNumber(income)})`;
+
+            // --------------------------------------------------------
+            // CLOSING BALANCE
+            // = available to budget - fixed expenses - flexible expenses
+            // --------------------------------------------------------
+            const closingBalance = availableToBudget - fixedExpenses - flexibleExpenses;
+
+            // --------------------------------------------------------
+            // HEADROOM CALCULATION
+            // = closing balance - float threshold
+            // Positive = buffer above threshold, negative = below threshold
+            // --------------------------------------------------------
+            const headroom = closingBalance - settings.floatThreshold;
+
+            // Determine headroom warning level:
+            // - negative: danger (red)
+            // - 0 to 20% above threshold: warning (amber)
+            // - above 20%: healthy (green)
+            const headroomThreshold = settings.floatThreshold * 0.2;
+            let headroomLevel = 'positive';
+            if (headroom < 0) {
+                headroomLevel = 'negative';
+            } else if (headroom <= headroomThreshold) {
+                headroomLevel = 'amber';
+            }
+
+            // --------------------------------------------------------
+            // TOTAL ASSIGNED
+            // = fixed expenses + flexible expenses
+            // --------------------------------------------------------
+            const totalAssigned = fixedExpenses + flexibleExpenses;
+
+            // --------------------------------------------------------
+            // FLOAT WARNING
+            // Flag if closing balance < float threshold
+            // --------------------------------------------------------
+            const floatWarning = closingBalance < settings.floatThreshold;
+
+            rows.push({
+                month: monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                income,
+                incomeTooltip,
+                fixedExpenses,
+                fixedTooltip,
+                fixedHasData,
+                flexibleExpenses,
+                flexibleHasData,
+                totalAssigned,
+                availableToBudget,
+                availableTooltip,
+                closingBalance,
+                headroom,
+                headroomLevel,
+                isPast,
+                isCurrent,
+                isBoundaryRow,
+                floatWarning
+            });
+
+            // Update prior closing balance for next iteration
+            priorClosingBalance = closingBalance;
+        }
+
+        return rows;
+    }
+
+    // Helper to format numbers for tooltips (no currency symbol)
+    function formatNumber(amount) {
+        return new Intl.NumberFormat('en-IE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    }
+
+    // ============================================================
+    // RENDERING
+    // ============================================================
+
+    function formatCurrency(amount) {
+        const formatted = new Intl.NumberFormat('en-IE', {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(Math.abs(amount));
+
+        if (amount < 0) {
+            return `<span class="negative">-${formatted}</span>`;
+        }
+        return formatted;
+    }
+
+    // Format headroom with +/- prefix and color coding
+    function formatHeadroom(amount, level) {
+        const formatted = new Intl.NumberFormat('en-IE', {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(Math.abs(amount));
+
+        const prefix = amount >= 0 ? '+' : '−';
+        return `<span class="${level}">${prefix}${formatted}</span>`;
+    }
+
+    // Render summary cards showing annual totals
+    function renderSummaryCards(rows, settings) {
+        const container = document.getElementById('summaryCards');
+
+        // Calculate annual totals
+        const totalIncome = rows.reduce((sum, r) => sum + r.income, 0);
+        const totalFixed = rows.reduce((sum, r) => sum + r.fixedExpenses, 0);
+        const totalFlexible = rows.reduce((sum, r) => sum + r.flexibleExpenses, 0);
+        const netPosition = totalIncome - totalFixed - totalFlexible;
+        const warningCount = rows.filter(r => r.floatWarning).length;
+
+        const formatValue = (val) => new Intl.NumberFormat('en-IE', {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(val);
+
+        container.innerHTML = `
+            <div class="summary-card">
+                <div class="label">Total Income</div>
+                <div class="value">${formatValue(totalIncome)}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Total Fixed</div>
+                <div class="value">${formatValue(totalFixed)}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Total Flexible</div>
+                <div class="value">${formatValue(totalFlexible)}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Net Position</div>
+                <div class="value ${netPosition < 0 ? 'negative' : 'positive'}">${formatValue(netPosition)}</div>
+            </div>
+            <div class="summary-card ${warningCount > 0 ? 'warning' : 'healthy'}">
+                <div class="label">Float Status</div>
+                <div class="value">${warningCount > 0 ? `⚠ ${warningCount} month${warningCount > 1 ? 's' : ''} below` : '✓ All healthy'}</div>
+            </div>
+        `;
+
+        container.style.display = 'grid';
+    }
+
+    function renderTable(rows, settings) {
+        const container = document.getElementById('tableContainer');
+        const floatFormatted = new Intl.NumberFormat('en-IE', {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(settings.floatThreshold);
+
+        const tableHtml = `
+            <div class="table-header">
+                <button id="exportCsvBtn" class="outline secondary">Export CSV</button>
+            </div>
+            <table class="budget-table">
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Income</th>
+                        <th>Fixed Expenses</th>
+                        <th>Flexible Expenses</th>
+                        <th>Total Assigned</th>
+                        <th>Available to Budget</th>
+                        <th>Closing Balance<small>floor: ${floatFormatted}</small></th>
+                        <th>Headroom</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(row => {
+                        let rowClass = [];
+                        if (row.isPast) rowClass.push('past-month');
+                        if (row.isCurrent) rowClass.push('current-month');
+                        if (row.isBoundaryRow) rowClass.push('boundary-row');
+                        if (row.floatWarning) rowClass.push('float-warning');
+
+                        // Determine cell content with no-data handling
+                        const fixedContent = row.fixedHasData
+                            ? formatCurrency(row.fixedExpenses)
+                            : '<span class="no-data">—</span>';
+                        const flexibleContent = row.flexibleHasData
+                            ? formatCurrency(row.flexibleExpenses)
+                            : '<span class="no-data">—</span>';
+
+                        return `
+                            <tr class="${rowClass.join(' ')}">
+                                <td>${row.month}</td>
+                                <td title="${row.incomeTooltip}">${formatCurrency(row.income)}</td>
+                                <td title="${row.fixedTooltip}">${fixedContent}</td>
+                                <td>${flexibleContent}</td>
+                                <td>${formatCurrency(row.totalAssigned)}</td>
+                                <td title="${row.availableTooltip}">${formatCurrency(row.availableToBudget)}</td>
+                                <td class="closing-balance">${formatCurrency(row.closingBalance)}</td>
+                                <td>${formatHeadroom(row.headroom, row.headroomLevel)}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+
+        container.innerHTML = tableHtml;
+
+        // Attach CSV export handler
+        document.getElementById('exportCsvBtn').addEventListener('click', () => exportCsv(rows));
+    }
+
+    // Export table data to CSV and trigger download
+    function exportCsv(rows) {
+        const currentYear = new Date().getFullYear();
+        const headers = ['Month', 'Income', 'Fixed Expenses', 'Flexible Expenses', 'Total Assigned', 'Available to Budget', 'Closing Balance', 'Headroom'];
+
+        const csvRows = [
+            headers.join(','),
+            ...rows.map(row => [
+                row.month,
+                row.income.toFixed(2),
+                row.fixedHasData ? row.fixedExpenses.toFixed(2) : '',
+                row.flexibleHasData ? row.flexibleExpenses.toFixed(2) : '',
+                row.totalAssigned.toFixed(2),
+                row.availableToBudget.toFixed(2),
+                row.closingBalance.toFixed(2),
+                row.headroom.toFixed(2)
+            ].join(','))
+        ];
+
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `ynab-annual-plan-${currentYear}.csv`);
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    function updateStatus(message, type = '') {
+        const statusBar = document.getElementById('statusBar');
+        statusBar.textContent = message;
+        statusBar.className = 'status-bar';
+        if (type) {
+            statusBar.classList.add(type);
+        }
+    }
+
+    // Render warnings panel for unsupported scheduled transaction frequencies
+    function renderWarnings(warnings) {
+        const panel = document.getElementById('warningsPanel');
+
+        if (!warnings || warnings.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+
+        panel.innerHTML = `
+            <details>
+                <summary>⚠ ${warnings.length} scheduled transaction warning${warnings.length > 1 ? 's' : ''}</summary>
+                <ul>
+                    ${warnings.map(w => `<li>${w}</li>`).join('')}
+                </ul>
+            </details>
+        `;
+        panel.style.display = 'block';
+    }
+
+    // Update the last refreshed timestamp
+    function updateLastRefreshed() {
+        const el = document.getElementById('lastRefreshed');
+        const now = new Date();
+        el.textContent = `Last refreshed: ${now.toLocaleTimeString()}`;
+    }
+
+    function updateStatusWithWarnings(rows) {
+        const warningCount = rows.filter(r => r.floatWarning).length;
+
+        if (warningCount === 0) {
+            updateStatus('All months healthy ✓', 'success');
+        } else {
+            updateStatus(`${warningCount} month${warningCount > 1 ? 's' : ''} below float threshold`, 'error');
+        }
+    }
+
+    // ============================================================
+    // MAIN REFRESH FLOW
+    // ============================================================
+
+    async function refreshData() {
+        const settings = loadSettings();
+
+        if (!settings.apiToken || !settings.budgetId) {
+            updateStatus('Please configure your YNAB API token and Budget ID', 'error');
+            return;
+        }
+
+        updateStatus('Fetching from YNAB...');
+        document.getElementById('refreshBtn').disabled = true;
+
+        try {
+            const data = await fetchYnabData(settings);
+            _debugData = data; // Store for debugging
+            const rows = calculateMonthlyRows(data, settings);
+            renderSummaryCards(rows, settings);
+            renderWarnings(data._warnings);
+            renderTable(rows, settings);
+            updateStatusWithWarnings(rows);
+            updateLastRefreshed();
+        } catch (error) {
+            // Handle specific API errors with helpful messages
+            if (error instanceof YnabApiError && (error.type === 'auth' || error.type === 'not_found')) {
+                updateStatus(error.message, 'error');
+                // Open settings panel for auth/config errors
+                document.getElementById('settingsPanel').setAttribute('open', '');
+            } else {
+                updateStatus(`Error: ${error.message}`, 'error');
+            }
+            console.error('Refresh error:', error);
+        } finally {
+            document.getElementById('refreshBtn').disabled = false;
+        }
+    }
+
+    // ============================================================
+    // INITIALIZATION
+    // ============================================================
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Populate settings form from localStorage
+        populateSettingsForm();
+
+        // Check if settings are complete
+        checkSettingsComplete();
+
+        // Event listeners
+        document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+        document.getElementById('refreshBtn').addEventListener('click', refreshData);
+        document.getElementById('testConnectionBtn').addEventListener('click', testConnection);
+        document.getElementById('openSettingsBtn').addEventListener('click', () => {
+            document.getElementById('settingsPanel').setAttribute('open', '');
+        });
+    });
+    </script>
+</body>
+</html>
