@@ -1,4 +1,22 @@
 <!DOCTYPE html>
+<!--
+    ============================================================
+    DEBUG CONSOLE COMMANDS
+    ============================================================
+    Run these in the browser console after clicking "Refresh Data"
+
+    | Command                              | Description                                                                                      |
+    |--------------------------------------|--------------------------------------------------------------------------------------------------|
+    | debugMonth('2026-01-01')             | Shows all categories for a month with budgeted/activity amounts, grouped by category group      |
+    | debugScheduled()                     | Lists all scheduled transactions with frequency, next date, and flags (flexible/income/etc)     |
+    | debugCategoryMonth(2)                | Shows calculation details for a month by index (0=Jan). Displays scheduled txns & YNAB activity |
+    | debugIncome()                        | Shows scheduled income for all months - raw transactions by account and month-by-month totals   |
+    | debugCurrentMonthFlexible()          | Deep dive into current month's flexible expenses and scheduled income with expected totals      |
+    | debugFutureMonthFlexible('2026-06')  | Same as above but for a specified future month (format: YYYY-MM)                                |
+    | debugAccountScheduled('Planning')    | Shows raw scheduled transactions for a specific account (partial name match)                    |
+
+    ============================================================
+-->
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
@@ -259,6 +277,190 @@
             margin: 0.25rem 0;
             color: #92400e;
         }
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--pico-muted-border-color);
+        }
+
+        .tab-nav button {
+            margin: 0;
+            border: none;
+            border-bottom: 2px solid transparent;
+            border-radius: 0;
+            background: none;
+            padding: 0.75rem 1.5rem;
+            font-weight: 500;
+            color: var(--pico-muted-color);
+            cursor: pointer;
+            margin-bottom: -2px;
+        }
+
+        .tab-nav button:hover {
+            color: var(--pico-primary);
+        }
+
+        .tab-nav button.active {
+            color: var(--pico-primary);
+            border-bottom-color: var(--pico-primary);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .category-table {
+            width: 100%;
+            overflow-x: auto;
+            font-size: 0.9rem;
+        }
+
+        .category-table th,
+        .category-table td {
+            text-align: right;
+            padding: 0.5rem;
+            white-space: nowrap;
+        }
+
+        .category-table th:first-child,
+        .category-table td:first-child {
+            text-align: left;
+            position: sticky;
+            left: 0;
+            background: var(--pico-background-color);
+        }
+
+        .category-table thead th {
+            font-size: 0.8rem;
+        }
+
+        .category-table tr.past-month {
+            opacity: var(--past-month-opacity);
+        }
+
+        .category-table tr.current-month {
+            background: var(--current-month-bg);
+        }
+
+        .category-table .total-col {
+            font-weight: 600;
+            border-left: 2px solid var(--pico-muted-border-color);
+        }
+
+        .category-table tfoot td {
+            font-weight: 600;
+            border-top: 2px solid var(--pico-muted-border-color);
+        }
+
+        /* Category Details Tab */
+        .filter-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-row select {
+            margin: 0;
+            width: auto;
+            min-width: 150px;
+        }
+
+        .filter-row label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .filter-row input[type="checkbox"] {
+            margin: 0;
+            width: 1.25rem;
+            height: 1.25rem;
+            min-width: 1.25rem;
+        }
+
+        .category-details-table {
+            width: 100%;
+            font-size: 0.9rem;
+        }
+
+        .category-details-table th,
+        .category-details-table td {
+            padding: 0.5rem 0.75rem;
+        }
+
+        .category-details-table th:last-child,
+        .category-details-table td:last-child {
+            text-align: right;
+        }
+
+        .category-details-table .mismatch {
+            color: var(--negative-color);
+            font-weight: 600;
+            cursor: help;
+        }
+
+        .category-details-table .mismatch-future {
+            color: #f87171;
+            font-weight: 600;
+            cursor: help;
+        }
+
+        .category-details-table .group-header td {
+            background: var(--pico-muted-border-color);
+            font-weight: 600;
+            padding: 0;
+        }
+
+        .category-details-table .group-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.75rem;
+            background: none;
+            border: none;
+            font-weight: 600;
+            font-size: inherit;
+            text-align: left;
+            cursor: pointer;
+            color: inherit;
+        }
+
+        .category-details-table .group-toggle:hover {
+            background: var(--pico-muted-color);
+            background-opacity: 0.1;
+        }
+
+        .category-details-table .group-toggle::before {
+            content: '▼';
+            font-size: 0.7rem;
+            transition: transform 0.2s;
+        }
+
+        .category-details-table .group-toggle.collapsed::before {
+            transform: rotate(-90deg);
+        }
+
+        .category-details-table .group-row.hidden {
+            display: none;
+        }
+
+        .empty-state {
+            color: var(--pico-muted-color);
+            text-align: center;
+            padding: 2rem;
+        }
     </style>
 </head>
 <body>
@@ -291,7 +493,7 @@
                 </label>
                 <label>
                     Flexible Expense Emoji Prefix
-                    <input type="text" id="flexiblePrefix" placeholder="e.g. 🔵" value="🔵">
+                    <input type="text" id="flexiblePrefix" placeholder="e.g. 🎯" value="🎯">
                 </label>
             </div>
             <div class="settings-buttons">
@@ -306,19 +508,81 @@
             <div class="status-bar" id="statusBar">Configure settings and click Refresh to load data</div>
         </div>
 
-        <!-- Summary Cards (hidden until data loads) -->
-        <div id="summaryCards" class="summary-cards" style="display: none;"></div>
+        <!-- Tab Navigation -->
+        <nav class="tab-nav" id="tabNav" style="display: none;">
+            <button class="active" data-tab="overview">Overview</button>
+            <button data-tab="categories">Flexible by Category</button>
+            <button data-tab="category-details">Category Details</button>
+            <button data-tab="transactions">Transactions</button>
+        </nav>
 
-        <!-- Warnings Panel (hidden until warnings exist) -->
-        <div id="warningsPanel" class="warnings-panel" style="display: none;"></div>
+        <!-- Overview Tab -->
+        <div id="tab-overview" class="tab-content active">
+            <!-- Summary Cards (hidden until data loads) -->
+            <div id="summaryCards" class="summary-cards" style="display: none;"></div>
 
-        <!-- Table Container -->
-        <div id="tableContainer">
-            <div class="missing-settings" id="missingSettingsMsg">
-                <p>Please complete your settings above to get started.</p>
-                <p>You'll need your YNAB API token and Budget ID.</p>
-                <button type="button" id="openSettingsBtn" class="outline">Open Settings</button>
+            <!-- Warnings Panel (hidden until warnings exist) -->
+            <div id="warningsPanel" class="warnings-panel" style="display: none;"></div>
+
+            <!-- Table Container -->
+            <div id="tableContainer">
+                <div class="missing-settings" id="missingSettingsMsg">
+                    <p>Please complete your settings above to get started.</p>
+                    <p>You'll need your YNAB API token and Budget ID.</p>
+                    <button type="button" id="openSettingsBtn" class="outline">Open Settings</button>
+                </div>
             </div>
+        </div>
+
+        <!-- Categories Tab -->
+        <div id="tab-categories" class="tab-content">
+            <div id="categoryTableContainer"></div>
+        </div>
+
+        <!-- Category Details Tab -->
+        <div id="tab-category-details" class="tab-content">
+            <div class="filter-row">
+                <select id="categoryDetailsMonth">
+                    <option value="0">January</option>
+                    <option value="1">February</option>
+                    <option value="2">March</option>
+                    <option value="3">April</option>
+                    <option value="4">May</option>
+                    <option value="5">June</option>
+                    <option value="6">July</option>
+                    <option value="7">August</option>
+                    <option value="8">September</option>
+                    <option value="9">October</option>
+                    <option value="10">November</option>
+                    <option value="11">December</option>
+                </select>
+                <label>
+                    <input type="checkbox" id="hideEmptyCategories">
+                    Hide empty categories
+                </label>
+            </div>
+            <div id="categoryDetailsContainer"></div>
+        </div>
+
+        <!-- Transactions Tab -->
+        <div id="tab-transactions" class="tab-content">
+            <div class="filter-row">
+                <select id="transactionsMonth">
+                    <option value="0">January</option>
+                    <option value="1">February</option>
+                    <option value="2">March</option>
+                    <option value="3">April</option>
+                    <option value="4">May</option>
+                    <option value="5">June</option>
+                    <option value="6">July</option>
+                    <option value="7">August</option>
+                    <option value="8">September</option>
+                    <option value="9">October</option>
+                    <option value="10">November</option>
+                    <option value="11">December</option>
+                </select>
+            </div>
+            <div id="transactionsContainer"></div>
         </div>
     </main>
 
@@ -333,7 +597,7 @@
             budgetId: localStorage.getItem('ynab_budgetId') || '',
             floatThreshold: parseFloat(localStorage.getItem('ynab_floatThreshold')) || 6500,
             decemberBalance: parseFloat(localStorage.getItem('ynab_decemberBalance')) || 0,
-            flexiblePrefix: localStorage.getItem('ynab_flexiblePrefix') || '🔵'
+            flexiblePrefix: localStorage.getItem('ynab_flexiblePrefix') || '🎯'
         };
     }
 
@@ -497,10 +761,60 @@
         const monthsData = await Promise.all(monthPromises);
         const currentYearMonths = monthsData.filter(m => m !== null);
 
+        // Flatten subtransactions: split transactions have category_name on subtransactions, not parent
+        const rawTransactions = transactionsData.data.transactions;
+        const flattenedTransactions = [];
+        for (const t of rawTransactions) {
+            if (t.subtransactions && t.subtransactions.length > 0) {
+                // Split transaction: use subtransactions instead of parent
+                for (const sub of t.subtransactions) {
+                    flattenedTransactions.push({
+                        ...sub,
+                        // Inherit parent fields that subtransactions don't have
+                        date: t.date,
+                        account_id: t.account_id,
+                        account_name: t.account_name,
+                        payee_id: sub.payee_id || t.payee_id,
+                        payee_name: sub.payee_name || t.payee_name,
+                        // Mark as subtransaction for debugging
+                        _is_subtransaction: true,
+                        _parent_id: t.id
+                    });
+                }
+            } else {
+                // Regular transaction: use as-is
+                flattenedTransactions.push(t);
+            }
+        }
+
+        // Also flatten scheduled transactions subtransactions
+        const rawScheduled = scheduledData.data.scheduled_transactions;
+        const flattenedScheduled = [];
+        for (const t of rawScheduled) {
+            if (t.subtransactions && t.subtransactions.length > 0) {
+                for (const sub of t.subtransactions) {
+                    flattenedScheduled.push({
+                        ...sub,
+                        date_first: t.date_first,
+                        date_next: t.date_next,
+                        frequency: t.frequency,
+                        account_id: t.account_id,
+                        account_name: t.account_name,
+                        payee_id: sub.payee_id || t.payee_id,
+                        payee_name: sub.payee_name || t.payee_name,
+                        _is_subtransaction: true,
+                        _parent_id: t.id
+                    });
+                }
+            } else {
+                flattenedScheduled.push(t);
+            }
+        }
+
         return {
             months: currentYearMonths,
-            transactions: transactionsData.data.transactions,
-            scheduledTransactions: scheduledData.data.scheduled_transactions
+            transactions: flattenedTransactions,
+            scheduledTransactions: flattenedScheduled
         };
     }
 
@@ -587,13 +901,706 @@
         console.log(`True Total Assigned: €${(fixedBudgeted + flexibleBudgeted).toFixed(2)}`);
     };
 
+    // Call this from browser console: debugScheduled()
+    // Shows all scheduled transactions and whether they're included
+    window.debugScheduled = function() {
+        if (!_debugData) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+
+        const settings = loadSettings();
+        const currentYear = new Date().getFullYear();
+        const scheduled = _debugData.scheduledTransactions;
+
+        console.log(`\n=== SCHEDULED TRANSACTIONS (${scheduled.length} total) ===`);
+        console.log(`Flexible prefix: "${settings.flexiblePrefix}"`);
+        console.log(`Current year: ${currentYear}\n`);
+
+        for (const t of scheduled) {
+            const payee = t.payee_name || 'Unknown';
+            const amount = (t.amount / 1000).toFixed(2);
+            const category = t.category_name || '(NO CATEGORY)';
+            const frequency = t.frequency || 'never';
+            const dateNext = t.date_next;
+            const dateYear = new Date(dateNext).getFullYear();
+            const dateMonth = new Date(dateNext).getMonth();
+
+            const isFlexible = t.category_name && t.category_name.startsWith(settings.flexiblePrefix);
+            const isIncome = t.amount > 0;
+            const isSupportedFreq = frequency === 'never' || frequency === 'monthly';
+            const isCurrentYear = dateYear === currentYear || (frequency === 'monthly' && dateYear <= currentYear);
+
+            let status = [];
+            if (!t.category_name) status.push('NO CATEGORY');
+            if (!isSupportedFreq) status.push(`UNSUPPORTED FREQ: ${frequency}`);
+            if (!isCurrentYear) status.push(`WRONG YEAR: ${dateYear}`);
+            if (isIncome) status.push('INCOME (positive)');
+            if (isFlexible) status.push('FLEXIBLE');
+            if (!isFlexible && !isIncome && t.category_name) status.push('FIXED (not flexible)');
+
+            const included = isFlexible && isSupportedFreq && isCurrentYear && !isIncome;
+            const marker = included ? '✓' : '✗';
+
+            console.log(`${marker} ${payee}: €${amount}`);
+            console.log(`   Category: ${category}`);
+            console.log(`   Frequency: ${frequency}, Next: ${dateNext} (month ${dateMonth})`);
+            console.log(`   Status: ${status.join(', ') || 'OK'}`);
+            console.log('');
+        }
+    };
+
+    // Call this from browser console: debugCategoryMonth(2) for March (0-indexed)
+    // Shows what's being calculated for category details in a specific month
+    window.debugCategoryMonth = function(monthIndex) {
+        if (!_debugData) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+
+        const settings = loadSettings();
+        const currentYear = new Date().getFullYear();
+        const currentMonthIndex = new Date().getMonth();
+        const today = new Date();
+        const todayDay = today.getDate();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+
+        const isPast = monthIndex < currentMonthIndex;
+        const isCurrent = monthIndex === currentMonthIndex;
+        const isFuture = monthIndex > currentMonthIndex;
+
+        console.log(`\n=== ${monthNames[monthIndex]} ${currentYear} ===`);
+        console.log(`Type: ${isPast ? 'PAST' : isCurrent ? 'CURRENT' : 'FUTURE'}`);
+        console.log(`Today: ${today.toISOString().split('T')[0]} (day ${todayDay})`);
+        console.log(`Flexible prefix: "${settings.flexiblePrefix}"\n`);
+
+        // Get YNAB month data
+        const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+        const ynabMonth = _debugData.months.find(m => m.month === monthStr);
+
+        // Expand scheduled transactions
+        const { expanded } = expandScheduledTransactions(_debugData.scheduledTransactions, currentYear);
+
+        // Get scheduled transactions for this month
+        const monthScheduled = expanded.filter(t =>
+            t.occurrence_month === monthIndex &&
+            t.occurrence_year === currentYear &&
+            t.category_name &&
+            t.category_name.startsWith(settings.flexiblePrefix)
+        );
+
+        console.log(`--- Scheduled transactions for ${monthNames[monthIndex]} ---`);
+        if (monthScheduled.length === 0) {
+            console.log('  (none)');
+        } else {
+            for (const t of monthScheduled) {
+                const txDay = new Date(t.date_next).getDate();
+                const willInclude = !isCurrent || txDay >= todayDay;
+                const marker = willInclude ? '✓' : '✗';
+                console.log(`${marker} ${t.payee_name}: €${Math.abs(t.amount / 1000).toFixed(2)}`);
+                console.log(`   Category: ${t.category_name}`);
+                console.log(`   date_next: ${t.date_next} (day ${txDay})`);
+                if (isCurrent && !willInclude) {
+                    console.log(`   EXCLUDED: day ${txDay} < today (${todayDay})`);
+                }
+            }
+        }
+
+        console.log(`\n--- YNAB activity for ${monthNames[monthIndex]} ---`);
+        if (!ynabMonth || !ynabMonth.categories) {
+            console.log('  (no month data)');
+        } else {
+            const flexCats = ynabMonth.categories.filter(c => c.name.startsWith(settings.flexiblePrefix));
+            for (const cat of flexCats) {
+                const activity = Math.abs(cat.activity || 0) / 1000;
+                const budgeted = (cat.budgeted || 0) / 1000;
+                if (activity > 0 || budgeted > 0) {
+                    console.log(`${cat.name}: activity=€${activity.toFixed(2)}, budgeted=€${budgeted.toFixed(2)}`);
+                }
+            }
+        }
+    };
+
+    // Call this from browser console: debugIncome()
+    // Shows scheduled income for all months (current + future)
+    window.debugIncome = function() {
+        if (!_debugData) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+
+        const currentYear = new Date().getFullYear();
+        const currentMonthIndex = new Date().getMonth();
+        const today = new Date();
+        const todayDay = today.getDate();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+
+        // Expand scheduled transactions
+        const { expanded, warnings } = expandScheduledTransactions(_debugData.scheduledTransactions, currentYear);
+
+        console.log(`\n=== SCHEDULED INCOME DEBUG ===`);
+        console.log(`Today: ${today.toISOString().split('T')[0]}`);
+        console.log(`Current month: ${monthNames[currentMonthIndex]}\n`);
+
+        if (warnings.length > 0) {
+            console.log(`--- Warnings (${warnings.length}) ---`);
+            warnings.forEach(w => console.log(`  ⚠ ${w}`));
+            console.log('');
+        }
+
+        // Show all income transactions (positive amounts)
+        const incomeTransactions = expanded.filter(t => t.amount > 0);
+        console.log(`--- All scheduled income transactions (${incomeTransactions.length} total) ---`);
+        for (const t of incomeTransactions) {
+            const txDate = new Date(t.date_next);
+            console.log(`${t.payee_name}: €${(t.amount / 1000).toFixed(2)}`);
+            console.log(`   Account: ${t.account_name || t.account_id || '(unknown)'}`);
+            console.log(`   Frequency: ${t.frequency}, date_next: ${t.date_next}`);
+            console.log(`   Expanded to: ${monthNames[t.occurrence_month]} ${t.occurrence_year}`);
+            console.log('');
+        }
+
+        // Also show RAW scheduled transactions (before expansion) to see all accounts
+        console.log(`\n--- RAW scheduled transactions with positive amounts (before expansion) ---`);
+        const rawIncome = _debugData.scheduledTransactions.filter(t => t.amount > 0);
+        console.log(`Found ${rawIncome.length} income transactions across accounts:`);
+        const byAccount = {};
+        for (const t of rawIncome) {
+            const acct = t.account_name || t.account_id || '(unknown)';
+            if (!byAccount[acct]) byAccount[acct] = [];
+            byAccount[acct].push(t);
+        }
+        for (const [acct, txns] of Object.entries(byAccount)) {
+            console.log(`\n  Account: ${acct} (${txns.length} transactions)`);
+            for (const t of txns) {
+                console.log(`    - ${t.payee_name}: €${(t.amount / 1000).toFixed(2)}, freq: ${t.frequency}, date_next: ${t.date_next}`);
+            }
+        }
+
+        // Show ALL scheduled transactions grouped by account (income AND expenses)
+        console.log(`\n--- ALL RAW scheduled transactions by account (${_debugData.scheduledTransactions.length} total) ---`);
+        const allByAccount = {};
+        for (const t of _debugData.scheduledTransactions) {
+            const acct = t.account_name || t.account_id || '(unknown)';
+            if (!allByAccount[acct]) allByAccount[acct] = [];
+            allByAccount[acct].push(t);
+        }
+        for (const [acct, txns] of Object.entries(allByAccount)) {
+            const incomeCount = txns.filter(t => t.amount > 0).length;
+            const expenseCount = txns.filter(t => t.amount < 0).length;
+            console.log(`\n  Account: ${acct}`);
+            console.log(`    Total: ${txns.length} (${incomeCount} income, ${expenseCount} expenses)`);
+            for (const t of txns) {
+                const type = t.amount > 0 ? 'INCOME' : 'expense';
+                console.log(`    - [${type}] ${t.payee_name}: €${(t.amount / 1000).toFixed(2)}, freq: ${t.frequency}, date_next: ${t.date_next}`);
+            }
+        }
+
+        // List all unique account names found
+        const allAccounts = Object.keys(allByAccount).sort();
+        console.log(`\n--- Accounts with scheduled transactions (${allAccounts.length}) ---`);
+        allAccounts.forEach(a => console.log(`  - ${a}`));
+
+        // Show monthly breakdown
+        console.log(`\n--- Income by Month ---`);
+        for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+            const isPast = monthIndex < currentMonthIndex;
+            const isCurrent = monthIndex === currentMonthIndex;
+            const isFuture = monthIndex > currentMonthIndex;
+
+            // Get YNAB actual income for past/current months
+            const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+            const ynabMonth = _debugData.months.find(m => m.month === monthStr);
+            const actualIncome = ynabMonth ? ynabMonth.income / 1000 : 0;
+
+            // Get scheduled income for this month
+            const monthIncome = expanded.filter(t => {
+                if (t.occurrence_month !== monthIndex) return false;
+                if (t.occurrence_year !== currentYear) return false;
+                if (t.amount <= 0) return false;
+                // For current month, only count future transactions
+                if (isCurrent) {
+                    const txDay = new Date(t.date_next).getDate();
+                    return txDay >= todayDay;
+                }
+                return true;
+            });
+
+            const scheduledTotal = monthIncome.reduce((sum, t) => sum + t.amount, 0) / 1000;
+
+            let label = isPast ? '(past)' : isCurrent ? '(current)' : '(future)';
+            let total = 0;
+            let breakdown = '';
+
+            if (isPast) {
+                total = actualIncome;
+                breakdown = `actual: €${actualIncome.toFixed(2)}`;
+            } else if (isCurrent) {
+                total = actualIncome + scheduledTotal;
+                breakdown = `actual: €${actualIncome.toFixed(2)} + scheduled: €${scheduledTotal.toFixed(2)}`;
+            } else {
+                total = scheduledTotal;
+                breakdown = `scheduled: €${scheduledTotal.toFixed(2)}`;
+            }
+
+            console.log(`${monthNames[monthIndex]} ${label}: €${total.toFixed(2)}`);
+            console.log(`   ${breakdown}`);
+
+            // List individual scheduled transactions for current/future months
+            if ((isCurrent || isFuture) && monthIncome.length > 0) {
+                for (const t of monthIncome) {
+                    const acct = t.account_name || t.account_id || '?';
+                    console.log(`   - ${t.payee_name}: €${(t.amount / 1000).toFixed(2)} (${t.frequency}, day ${new Date(t.date_next).getDate()}, account: ${acct})`);
+                }
+            }
+        }
+    };
+
+    // Debug current month flexible expenses - shows actual + scheduled transactions
+    window.debugCurrentMonthFlexible = function() {
+        if (!_debugData) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+
+        const settings = loadSettings();
+        const currentYear = new Date().getFullYear();
+        const currentMonthIndex = new Date().getMonth();
+        const today = new Date();
+        const todayDay = today.getDate();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+        const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}-01`;
+
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`CURRENT MONTH FLEXIBLE EXPENSES DEBUG`);
+        console.log(`${'='.repeat(60)}`);
+        console.log(`Today: ${today.toISOString().split('T')[0]} (day ${todayDay})`);
+        console.log(`Current month: ${monthNames[currentMonthIndex]} ${currentYear}`);
+        console.log(`Flexible prefix: "${settings.flexiblePrefix}"`);
+        console.log(`${'='.repeat(60)}\n`);
+
+        // Get YNAB month data
+        const ynabMonth = _debugData.months.find(m => m.month === monthStr);
+
+        // ========== PART 1: ACTUAL ACTIVITY FROM YNAB CATEGORIES ==========
+        console.log(`--- PART 1: ACTUAL ACTIVITY (from YNAB categories, visible only) ---\n`);
+
+        if (!ynabMonth || !ynabMonth.categories) {
+            console.log('❌ No YNAB data for current month!\n');
+        } else {
+            const flexibleCategories = ynabMonth.categories.filter(cat =>
+                cat.name.startsWith(settings.flexiblePrefix) && !cat.hidden
+            );
+
+            console.log(`Found ${flexibleCategories.length} visible flexible categories:\n`);
+
+            let totalActivity = 0;
+            for (const cat of flexibleCategories) {
+                const activity = Math.abs(cat.activity || 0) / 1000;
+                const budgeted = (cat.budgeted || 0) / 1000;
+                totalActivity += activity;
+                console.log(`  📁 ${cat.name}`);
+                console.log(`     Budgeted: €${budgeted.toFixed(2)}`);
+                console.log(`     Activity: €${activity.toFixed(2)} (raw: ${cat.activity})`);
+                console.log('');
+            }
+            console.log(`  ══════════════════════════════════`);
+            console.log(`  TOTAL ACTUAL ACTIVITY: €${totalActivity.toFixed(2)}\n`);
+        }
+
+        // ========== PART 2: ACTUAL TRANSACTIONS FROM YNAB ==========
+        console.log(`--- PART 2: ACTUAL TRANSACTIONS (from YNAB transactions API) ---\n`);
+
+        const actualTransactions = (_debugData.transactions || []).filter(t => {
+            const txDate = new Date(t.date);
+            return txDate.getMonth() === currentMonthIndex &&
+                   txDate.getFullYear() === currentYear &&
+                   t.category_name &&
+                   t.category_name.startsWith(settings.flexiblePrefix);
+        });
+
+        const actualExpenses = actualTransactions.filter(t => t.amount < 0);
+        const actualRefunds = actualTransactions.filter(t => t.amount > 0);
+
+        console.log(`Found ${actualTransactions.length} actual flexible transactions (${actualExpenses.length} expenses, ${actualRefunds.length} refunds):\n`);
+
+        let grossExpensesActual = 0;
+        let grossRefundsActual = 0;
+        for (const t of actualTransactions) {
+            const isRefund = t.amount > 0;
+            const amount = Math.abs(t.amount) / 1000;
+            if (isRefund) {
+                grossRefundsActual += amount;
+            } else {
+                grossExpensesActual += amount;
+            }
+            const txDate = new Date(t.date);
+            const flowMarker = isRefund ? '⬆️ REFUND' : '⬇️ EXPENSE';
+            console.log(`  ${flowMarker} ${t.date} (day ${txDate.getDate()}): ${t.payee_name || '(no payee)'}`);
+            console.log(`     Category: ${t.category_name}`);
+            console.log(`     Account: ${t.account_name || '(unknown)'}`);
+            console.log(`     Amount: €${amount.toFixed(2)} (raw: ${t.amount})`);
+            console.log('');
+        }
+        const netActual = grossExpensesActual - grossRefundsActual;
+        console.log(`  ══════════════════════════════════`);
+        console.log(`  Gross expenses: €${grossExpensesActual.toFixed(2)}`);
+        console.log(`  Gross refunds:  €${grossRefundsActual.toFixed(2)}`);
+        console.log(`  NET TOTAL:      €${netActual.toFixed(2)}\n`);
+
+        // ========== PART 3: SCHEDULED FLEXIBLE TRANSACTIONS BY ACCOUNT ==========
+        console.log(`--- PART 3: SCHEDULED FLEXIBLE TRANSACTIONS BY ACCOUNT ---\n`);
+
+        const { expanded } = expandScheduledTransactions(_debugData.scheduledTransactions, currentYear);
+
+        // Group flexible transactions by account
+        const byAccount = {};
+        for (const t of expanded) {
+            if (t.occurrence_month !== currentMonthIndex || t.occurrence_year !== currentYear) continue;
+            if (!t.category_name || !t.category_name.startsWith(settings.flexiblePrefix)) continue;
+            const acct = t.account_name || '(unknown account)';
+            if (!byAccount[acct]) byAccount[acct] = [];
+            byAccount[acct].push(t);
+        }
+
+        for (const [acct, txns] of Object.entries(byAccount)) {
+            const expenses = txns.filter(t => t.amount < 0);
+            const refunds = txns.filter(t => t.amount > 0);
+            console.log(`  📂 ${acct}: ${txns.length} flexible (${expenses.length} expenses, ${refunds.length} refunds)`);
+        }
+        console.log('');
+
+        // ========== PART 4: SCHEDULED FLEXIBLE TRANSACTIONS ==========
+        console.log(`--- PART 4: SCHEDULED FLEXIBLE TRANSACTIONS FOR ${monthNames[currentMonthIndex].toUpperCase()} ---\n`);
+
+        // All scheduled flexible transactions for current month (including refunds)
+        const allScheduledFlexible = expanded.filter(t => {
+            return t.occurrence_month === currentMonthIndex &&
+                   t.occurrence_year === currentYear &&
+                   t.category_name &&
+                   t.category_name.startsWith(settings.flexiblePrefix);
+        });
+
+        const flexExpenses = allScheduledFlexible.filter(t => t.amount < 0);
+        const flexRefunds = allScheduledFlexible.filter(t => t.amount > 0);
+
+        console.log(`Found ${allScheduledFlexible.length} scheduled flexible transactions (${flexExpenses.length} expenses, ${flexRefunds.length} refunds):\n`);
+
+        let pastScheduledExpenses = 0;
+        let pastScheduledRefunds = 0;
+        let futureScheduledExpenses = 0;
+        let futureScheduledRefunds = 0;
+
+        for (const t of allScheduledFlexible) {
+            const isRefund = t.amount > 0;
+            const amount = Math.abs(t.amount) / 1000;
+            const txDay = new Date(t.date_next).getDate();
+            const isPast = txDay < todayDay;
+            const timeMarker = isPast ? '✓ PAST' : '⏳ FUTURE';
+            const flowMarker = isRefund ? '⬆️ REFUND' : '⬇️ EXPENSE';
+
+            if (isPast) {
+                if (isRefund) pastScheduledRefunds += amount;
+                else pastScheduledExpenses += amount;
+            } else {
+                if (isRefund) futureScheduledRefunds += amount;
+                else futureScheduledExpenses += amount;
+            }
+
+            console.log(`  [${timeMarker}] ${flowMarker} Day ${txDay}: ${t.payee_name || '(no payee)'}`);
+            console.log(`     Category: ${t.category_name}`);
+            console.log(`     Account: ${t.account_name || '(unknown)'}`);
+            console.log(`     Amount: €${amount.toFixed(2)}`);
+            console.log(`     Frequency: ${t.frequency}, date_next: ${t.date_next}`);
+            console.log('');
+        }
+
+        const pastNet = pastScheduledExpenses - pastScheduledRefunds;
+        const futureNet = futureScheduledExpenses - futureScheduledRefunds;
+
+        console.log(`  ══════════════════════════════════`);
+        console.log(`  Past (day < ${todayDay}): €${pastNet.toFixed(2)} net (€${pastScheduledExpenses.toFixed(2)} expenses - €${pastScheduledRefunds.toFixed(2)} refunds) - should be in activity already`);
+        console.log(`  Future (day >= ${todayDay}): €${futureNet.toFixed(2)} net (€${futureScheduledExpenses.toFixed(2)} expenses - €${futureScheduledRefunds.toFixed(2)} refunds) - added to estimate`);
+        console.log('');
+
+        // ========== PART 5: SCHEDULED INCOME ==========
+        console.log(`--- PART 5: SCHEDULED INCOME FOR ${monthNames[currentMonthIndex].toUpperCase()} ---\n`);
+
+        const scheduledIncome = expanded.filter(t => {
+            return t.occurrence_month === currentMonthIndex &&
+                   t.occurrence_year === currentYear &&
+                   t.amount > 0;
+        });
+
+        console.log(`Found ${scheduledIncome.length} scheduled income transactions:\n`);
+
+        let pastScheduledIncome = 0;
+        let futureScheduledIncome = 0;
+
+        for (const t of scheduledIncome) {
+            const amount = t.amount / 1000;
+            const txDay = new Date(t.date_next).getDate();
+            const isPast = txDay < todayDay;
+            const timeMarker = isPast ? '✓ PAST' : '⏳ FUTURE';
+
+            if (isPast) {
+                pastScheduledIncome += amount;
+            } else {
+                futureScheduledIncome += amount;
+            }
+
+            console.log(`  [${timeMarker}] 💰 INCOME Day ${txDay}: ${t.payee_name || '(no payee)'}`);
+            console.log(`     Category: ${t.category_name || '(none)'}`);
+            console.log(`     Account: ${t.account_name || '(unknown)'}`);
+            console.log(`     Amount: €${amount.toFixed(2)}`);
+            console.log(`     Frequency: ${t.frequency}, date_next: ${t.date_next}`);
+            console.log('');
+        }
+
+        console.log(`  ══════════════════════════════════`);
+        console.log(`  Past (day < ${todayDay}): €${pastScheduledIncome.toFixed(2)} - should be in actual income already`);
+        console.log(`  Future (day >= ${todayDay}): €${futureScheduledIncome.toFixed(2)} - added to estimate`);
+        console.log('');
+
+        // ========== SUMMARY ==========
+        console.log(`${'='.repeat(60)}`);
+        console.log(`SUMMARY`);
+        console.log(`${'='.repeat(60)}`);
+        const visibleFlexCats = ynabMonth ? ynabMonth.categories.filter(c => c.name.startsWith(settings.flexiblePrefix) && !c.hidden) : [];
+        const actualActivityTotal = visibleFlexCats.reduce((s, c) => s + Math.abs(c.activity || 0), 0) / 1000;
+        const actualIncome = ynabMonth ? ynabMonth.income / 1000 : 0;
+        console.log(`FLEXIBLE EXPENSES:`);
+        console.log(`  Actual activity from categories: €${actualActivityTotal.toFixed(2)}`);
+        console.log(`  Scheduled future (day >= ${todayDay}): €${futureNet.toFixed(2)} net`);
+        console.log(`  EXPECTED TOTAL: €${(actualActivityTotal + futureNet).toFixed(2)}`);
+        console.log(`─────────────────────────────────────`);
+        console.log(`INCOME:`);
+        console.log(`  Actual income from YNAB: €${actualIncome.toFixed(2)}`);
+        console.log(`  Scheduled future (day >= ${todayDay}): €${futureScheduledIncome.toFixed(2)}`);
+        console.log(`  EXPECTED TOTAL: €${(actualIncome + futureScheduledIncome).toFixed(2)}`);
+        console.log(`${'='.repeat(60)}\n`);
+    };
+
+    // Debug future month flexible expenses
+    window.debugFutureMonthFlexible = function(monthStr) {
+        if (!_debugData) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+
+        if (!monthStr || !/^\d{4}-\d{2}$/.test(monthStr)) {
+            console.log('Usage: debugFutureMonthFlexible("2026-05")');
+            return;
+        }
+
+        const settings = loadSettings();
+        const [yearStr, monthNumStr] = monthStr.split('-');
+        const targetYear = parseInt(yearStr);
+        const targetMonthIndex = parseInt(monthNumStr) - 1; // 0-indexed
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                           'July', 'August', 'September', 'October', 'November', 'December'];
+
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`FUTURE MONTH FLEXIBLE EXPENSES DEBUG: ${monthNames[targetMonthIndex]} ${targetYear}`);
+        console.log(`${'='.repeat(60)}`);
+        console.log(`Flexible prefix: "${settings.flexiblePrefix}"`);
+        console.log(`${'='.repeat(60)}\n`);
+
+        const { expanded } = expandScheduledTransactions(_debugData.scheduledTransactions, targetYear);
+
+        // ========== PART 1: SCHEDULED FLEXIBLE TRANSACTIONS BY ACCOUNT ==========
+        console.log(`--- PART 1: SCHEDULED FLEXIBLE TRANSACTIONS BY ACCOUNT FOR ${monthNames[targetMonthIndex].toUpperCase()} ---\n`);
+
+        // Group flexible transactions by account
+        const byAccount = {};
+        for (const t of expanded) {
+            if (t.occurrence_month !== targetMonthIndex || t.occurrence_year !== targetYear) continue;
+            if (!t.category_name || !t.category_name.startsWith(settings.flexiblePrefix)) continue;
+            const acct = t.account_name || '(unknown account)';
+            if (!byAccount[acct]) byAccount[acct] = [];
+            byAccount[acct].push(t);
+        }
+
+        for (const [acct, txns] of Object.entries(byAccount)) {
+            const expenses = txns.filter(t => t.amount < 0);
+            const refunds = txns.filter(t => t.amount > 0);
+            console.log(`  📂 ${acct}: ${txns.length} flexible (${expenses.length} expenses, ${refunds.length} refunds)`);
+        }
+        console.log('');
+
+        // ========== PART 2: SCHEDULED FLEXIBLE TRANSACTIONS ==========
+        console.log(`--- PART 2: SCHEDULED FLEXIBLE TRANSACTIONS FOR ${monthNames[targetMonthIndex].toUpperCase()} ---\n`);
+
+        const allScheduledFlexible = expanded.filter(t => {
+            return t.occurrence_month === targetMonthIndex &&
+                   t.occurrence_year === targetYear &&
+                   t.category_name &&
+                   t.category_name.startsWith(settings.flexiblePrefix);
+        });
+
+        const flexibleExpenses = allScheduledFlexible.filter(t => t.amount < 0);
+        const flexibleRefunds = allScheduledFlexible.filter(t => t.amount > 0);
+
+        console.log(`Found ${allScheduledFlexible.length} scheduled flexible transactions (${flexibleExpenses.length} expenses, ${flexibleRefunds.length} refunds):\n`);
+
+        let grossExpenses = 0;
+        let grossRefunds = 0;
+        for (const t of allScheduledFlexible) {
+            const isRefund = t.amount > 0;
+            const amount = Math.abs(t.amount) / 1000;
+            if (isRefund) {
+                grossRefunds += amount;
+            } else {
+                grossExpenses += amount;
+            }
+            const marker = isRefund ? '⬆️ REFUND' : '⬇️ EXPENSE';
+
+            console.log(`  ${marker} ${t.payee_name || '(no payee)'}: €${amount.toFixed(2)}`);
+            console.log(`     Category: ${t.category_name}`);
+            console.log(`     Account: ${t.account_name || '(unknown)'}`);
+            console.log(`     Frequency: ${t.frequency}, date_next: ${t.date_next}`);
+            console.log('');
+        }
+
+        const netFlexible = grossExpenses - grossRefunds;
+        console.log(`  ══════════════════════════════════`);
+        console.log(`  Gross expenses: €${grossExpenses.toFixed(2)}`);
+        console.log(`  Gross refunds:  €${grossRefunds.toFixed(2)}`);
+        console.log(`  NET FLEXIBLE:   €${netFlexible.toFixed(2)}\n`);
+
+        // ========== PART 3: SCHEDULED INCOME ==========
+        console.log(`--- PART 3: SCHEDULED INCOME FOR ${monthNames[targetMonthIndex].toUpperCase()} ---\n`);
+
+        // Income: positive amount AND category is 'Inflow: Ready to Assign'
+        // (positive amounts with other categories are refunds, not income)
+        const scheduledIncome = expanded.filter(t => {
+            return t.occurrence_month === targetMonthIndex &&
+                   t.occurrence_year === targetYear &&
+                   t.amount > 0 &&
+                   t.category_name === 'Inflow: Ready to Assign';
+        });
+
+        console.log(`Found ${scheduledIncome.length} scheduled income transactions:\n`);
+
+        let totalScheduledIncome = 0;
+
+        for (const t of scheduledIncome) {
+            const amount = t.amount / 1000;
+            totalScheduledIncome += amount;
+
+            console.log(`  💰 INCOME ${t.payee_name || '(no payee)'}: €${amount.toFixed(2)}`);
+            console.log(`     Category: ${t.category_name || '(none)'}`);
+            console.log(`     Account: ${t.account_name || '(unknown)'}`);
+            console.log(`     Frequency: ${t.frequency}, date_next: ${t.date_next}`);
+            console.log('');
+        }
+
+        console.log(`  ══════════════════════════════════`);
+        console.log(`  TOTAL SCHEDULED INCOME: €${totalScheduledIncome.toFixed(2)}\n`);
+
+        // ========== SUMMARY ==========
+        console.log(`${'='.repeat(60)}`);
+        console.log(`SUMMARY FOR ${monthNames[targetMonthIndex].toUpperCase()} ${targetYear}`);
+        console.log(`${'='.repeat(60)}`);
+        console.log(`FLEXIBLE EXPENSES:`);
+        console.log(`  Gross expenses: €${grossExpenses.toFixed(2)}`);
+        console.log(`  Gross refunds:  €${grossRefunds.toFixed(2)}`);
+        console.log(`  NET TOTAL:      €${netFlexible.toFixed(2)}`);
+        console.log(`─────────────────────────────────────`);
+        console.log(`INCOME:`);
+        console.log(`  Scheduled income: €${totalScheduledIncome.toFixed(2)}`);
+        console.log(`${'='.repeat(60)}\n`);
+    };
+
+    // Debug raw scheduled transactions from a specific account (before expansion)
+    window.debugAccountScheduled = function(accountSearch) {
+        if (!_debugData) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+
+        if (!accountSearch) {
+            console.log('Usage: debugAccountScheduled("Planning") - partial match on account name');
+            console.log('\nAvailable accounts with scheduled transactions:');
+            const accounts = new Set();
+            for (const t of _debugData.scheduledTransactions) {
+                accounts.add(t.account_name || '(unknown)');
+            }
+            for (const acct of [...accounts].sort()) {
+                const count = _debugData.scheduledTransactions.filter(t => (t.account_name || '(unknown)') === acct).length;
+                console.log(`  - "${acct}" (${count} transactions)`);
+            }
+            return;
+        }
+
+        const settings = loadSettings();
+        const currentYear = new Date().getFullYear();
+
+        // Find matching transactions (case-insensitive partial match)
+        const matchingTxns = _debugData.scheduledTransactions.filter(t =>
+            (t.account_name || '').toLowerCase().includes(accountSearch.toLowerCase())
+        );
+
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`RAW SCHEDULED TRANSACTIONS FOR ACCOUNT: "${accountSearch}"`);
+        console.log(`${'='.repeat(60)}`);
+        console.log(`Found ${matchingTxns.length} transactions (before expansion)\n`);
+
+        // Group by frequency
+        const byFrequency = {};
+        for (const t of matchingTxns) {
+            const freq = t.frequency || 'never';
+            if (!byFrequency[freq]) byFrequency[freq] = [];
+            byFrequency[freq].push(t);
+        }
+
+        console.log(`--- BY FREQUENCY ---`);
+        for (const [freq, txns] of Object.entries(byFrequency)) {
+            const supported = ['never', 'monthly', 'yearly'].includes(freq);
+            const marker = supported ? '✓' : '❌';
+            console.log(`  ${marker} ${freq}: ${txns.length} transactions ${supported ? '' : '(NOT SUPPORTED - will be skipped!)'}`);
+        }
+        console.log('');
+
+        console.log(`--- ALL TRANSACTIONS ---\n`);
+        for (const t of matchingTxns) {
+            const amount = Math.abs(t.amount) / 1000;
+            const isExpense = t.amount < 0;
+            const isFlexible = t.category_name && t.category_name.startsWith(settings.flexiblePrefix);
+            const freq = t.frequency || 'never';
+            const supported = ['never', 'monthly', 'yearly'].includes(freq);
+            const dateNext = new Date(t.date_next);
+            const dateYear = dateNext.getFullYear();
+            const dateMonth = dateNext.getMonth();
+
+            let status = [];
+            if (!supported) status.push(`❌ UNSUPPORTED FREQ: ${freq}`);
+            if (!isExpense) status.push('💰 INCOME');
+            if (isFlexible) status.push('🔵 FLEXIBLE');
+            if (!t.category_name) status.push('⚠️ NO CATEGORY');
+            if (dateYear > currentYear) status.push(`⏭️ FUTURE YEAR: ${dateYear}`);
+
+            console.log(`  ${t.payee_name || '(no payee)'}: €${amount.toFixed(2)}`);
+            console.log(`     Category: ${t.category_name || '(none)'}`);
+            console.log(`     Frequency: ${freq}`);
+            console.log(`     date_next: ${t.date_next} (month ${dateMonth}, year ${dateYear})`);
+            console.log(`     Status: ${status.length > 0 ? status.join(', ') : '✓ OK'}`);
+            console.log('');
+        }
+
+        console.log(`${'='.repeat(60)}\n`);
+    };
+
     // ============================================================
     // SCHEDULED TRANSACTION EXPANSION
     // ============================================================
 
     // Expand scheduled transactions to all their occurrences within the current year
     // Returns { expanded: [...], warnings: [...] }
-    // Supports: "never" (one-off), "monthly" (recurring)
+    // Supports: "never" (one-off), "monthly" (recurring), "yearly" (annual)
     // Other frequencies generate a warning and are skipped
     function expandScheduledTransactions(scheduledTransactions, currentYear) {
         const expanded = [];
@@ -627,6 +1634,16 @@
                     expanded.push({
                         ...t,
                         occurrence_month: month,
+                        occurrence_year: currentYear
+                    });
+                }
+            } else if (frequency === 'yearly') {
+                // Yearly recurring: include if date_next falls in current year
+                // If date_next is in a future year, this year's occurrence already happened
+                if (dateNext.getFullYear() === currentYear) {
+                    expanded.push({
+                        ...t,
+                        occurrence_month: dateNext.getMonth(),
                         occurrence_year: currentYear
                     });
                 }
@@ -714,22 +1731,61 @@
             // --------------------------------------------------------
             // INCOME CALCULATION
             // Past months: use YNAB's actual income field
-            // Current/future months: sum scheduled transactions with positive amounts
+            // Current month: actual income + scheduled income still to come
+            // Future months: sum scheduled transactions with positive amounts
             // Uses expanded transactions to handle monthly recurring income
             // --------------------------------------------------------
             let income = 0;
             let incomeTooltip = '';
             if (isPast) {
-                income = ynabMonth ? ynabMonth.income / 1000 : 0;
-                incomeTooltip = 'Actual YNAB income';
+                // Sum only true income (category = 'Inflow: Ready to Assign'), excluding refunds
+                income = (data.transactions || [])
+                    .filter(t => {
+                        const txDate = new Date(t.date);
+                        return txDate.getMonth() === monthIndex &&
+                               txDate.getFullYear() === currentYear &&
+                               t.amount > 0 &&
+                               t.category_name === 'Inflow: Ready to Assign';
+                    })
+                    .reduce((sum, t) => sum + t.amount, 0) / 1000;
+                incomeTooltip = 'Actual income (excludes refunds)';
+            } else if (isCurrent) {
+                // Current month: actual income that has occurred + scheduled income still to come
+                // Sum only true income, excluding refunds
+                const actualIncome = (data.transactions || [])
+                    .filter(t => {
+                        const txDate = new Date(t.date);
+                        return txDate.getMonth() === monthIndex &&
+                               txDate.getFullYear() === currentYear &&
+                               t.amount > 0 &&
+                               t.category_name === 'Inflow: Ready to Assign';
+                    })
+                    .reduce((sum, t) => sum + t.amount, 0) / 1000;
+                const todayDay = today.getDate();
+                const scheduledIncome = expandedTransactions
+                    .filter(t => {
+                        if (t.occurrence_month !== monthIndex) return false;
+                        if (t.occurrence_year !== currentYear) return false;
+                        if (t.amount <= 0) return false;
+                        if (t.category_name !== 'Inflow: Ready to Assign') return false;
+                        // Only include if the day hasn't passed yet
+                        const txDay = new Date(t.date_next).getDate();
+                        return txDay >= todayDay;
+                    })
+                    .reduce((sum, t) => sum + t.amount, 0) / 1000;
+                income = actualIncome + scheduledIncome;
+                incomeTooltip = scheduledIncome > 0
+                    ? `Actual (€${formatNumber(actualIncome)}) + scheduled (€${formatNumber(scheduledIncome)})`
+                    : 'Actual YNAB income';
             } else {
-                // Sum scheduled income (positive amounts) for this month
+                // Future months: sum scheduled income (positive amounts)
                 // Uses pre-expanded transactions which include all monthly occurrences
                 income = expandedTransactions
                     .filter(t => {
                         return t.occurrence_month === monthIndex &&
                                t.occurrence_year === currentYear &&
-                               t.amount > 0;
+                               t.amount > 0 &&
+                               t.category_name === 'Inflow: Ready to Assign';
                     })
                     .reduce((sum, t) => sum + t.amount, 0) / 1000;
                 incomeTooltip = 'Estimated from scheduled transactions';
@@ -770,6 +1826,9 @@
                 if (currentFixed > 0) {
                     fixedExpenses = currentFixed;
                     fixedTooltip = 'Actual budgeted amount';
+                    // Update for future months to use current month's data
+                    lastKnownFixedExpenses = currentFixed;
+                    lastKnownFixedSourceMonth = monthNames[monthIndex];
                 } else {
                     fixedExpenses = lastKnownFixedExpenses;
                     fixedTooltip = `Based on ${lastKnownFixedSourceMonth}'s budgeted amount`;
@@ -784,24 +1843,49 @@
             // FLEXIBLE EXPENSES CALCULATION
             // Flexible categories = those starting with the flexible emoji prefix
             // Past: sum of budgeted amounts (assigned) for flexible categories
-            // Current/future: sum scheduled transactions for flexible categories
+            // Current: actual activity + scheduled transactions still to come
+            // Future: sum scheduled transactions for flexible categories
             // Skip transactions without a category assigned (graceful handling)
             // --------------------------------------------------------
             let flexibleExpenses = 0;
             let flexibleHasData = true;
+            let flexibleTooltip = '';
 
             if (isPast && hasMonthData) {
-                // Sum budgeted amounts for flexible categories (same as fixed - use assigned, not activity)
+                // Past months: use budgeted amounts (visible categories only)
                 flexibleExpenses = ynabMonth.categories
-                    .filter(cat => cat.name.startsWith(settings.flexiblePrefix))
+                    .filter(cat => cat.name.startsWith(settings.flexiblePrefix) && !cat.hidden)
                     .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
-            } else if (isPast && !hasMonthData) {
+                flexibleTooltip = 'Budgeted flexible expenses';
+            } else if (isCurrent && hasMonthData) {
+                // Current month: actual activity + scheduled transactions still to come (visible categories only)
+                // Sum raw amounts (negative = expense, positive = refund) and negate to get net expense
+                const actualFlexible = ynabMonth.categories
+                    .filter(cat => cat.name.startsWith(settings.flexiblePrefix) && !cat.hidden)
+                    .reduce((sum, cat) => sum + (cat.activity || 0), 0) / -1000;
+                const todayDay = today.getDate();
+                // Include both expenses (negative) and refunds (positive) - refunds reduce the total
+                const scheduledFlexible = expandedTransactions
+                    .filter(t => {
+                        if (t.occurrence_month !== monthIndex) return false;
+                        if (t.occurrence_year !== currentYear) return false;
+                        if (!t.category_name || !t.category_name.startsWith(settings.flexiblePrefix)) return false;
+                        const txDay = new Date(t.date_next).getDate();
+                        return txDay >= todayDay;
+                    })
+                    .reduce((sum, t) => sum + t.amount, 0) / -1000;
+                flexibleExpenses = actualFlexible + scheduledFlexible;
+                // Always show breakdown for current month debugging
+                flexibleTooltip = `Actual activity (€${formatNumber(actualFlexible)}) + scheduled from day ${todayDay}+ (€${formatNumber(scheduledFlexible)})`;
+            } else if ((isPast || isCurrent) && !hasMonthData) {
                 flexibleExpenses = 0;
                 flexibleHasData = false;
+                flexibleTooltip = 'No data available';
             } else {
-                // Sum scheduled flexible expenses for this month
+                // Future months: sum scheduled flexible expenses
                 // Uses pre-expanded transactions to handle monthly recurring expenses
                 // Skip transactions without a category (t.category_name check)
+                // Include both expenses (negative) and refunds (positive) - refunds reduce the total
                 flexibleExpenses = expandedTransactions
                     .filter(t => {
                         return t.occurrence_month === monthIndex &&
@@ -809,7 +1893,8 @@
                                t.category_name &&
                                t.category_name.startsWith(settings.flexiblePrefix);
                     })
-                    .reduce((sum, t) => sum + Math.abs(t.amount), 0) / 1000;
+                    .reduce((sum, t) => sum + t.amount, 0) / -1000;
+                flexibleTooltip = 'Estimated from scheduled transactions';
             }
 
             // --------------------------------------------------------
@@ -865,6 +1950,7 @@
                 fixedTooltip,
                 fixedHasData,
                 flexibleExpenses,
+                flexibleTooltip,
                 flexibleHasData,
                 totalAssigned,
                 availableToBudget,
@@ -1015,7 +2101,7 @@
                                 <td>${row.month}</td>
                                 <td title="${row.incomeTooltip}">${formatCurrency(row.income)}</td>
                                 <td title="${row.fixedTooltip}">${fixedContent}</td>
-                                <td>${flexibleContent}</td>
+                                <td title="${row.flexibleTooltip}">${flexibleContent}</td>
                                 <td>${formatCurrency(row.totalAssigned)}</td>
                                 <td title="${row.availableTooltip}">${formatCurrency(row.availableToBudget)}</td>
                                 <td class="closing-balance">${formatCurrency(row.closingBalance)}</td>
@@ -1113,6 +2199,641 @@
     }
 
     // ============================================================
+    // CATEGORY BREAKDOWN TABLE
+    // ============================================================
+
+    // Calculate flexible expenses per category per month
+    function calculateCategoryBreakdown(data, settings) {
+        const currentYear = new Date().getFullYear();
+        const currentMonthIndex = new Date().getMonth();
+
+        // Expand scheduled transactions
+        const { expanded: expandedTransactions } =
+            expandScheduledTransactions(data.scheduledTransactions, currentYear);
+
+        // Collect all flexible category names
+        const flexibleCategories = new Set();
+
+        // From YNAB month data
+        for (const month of data.months) {
+            if (month.categories) {
+                for (const cat of month.categories) {
+                    if (cat.name.startsWith(settings.flexiblePrefix)) {
+                        flexibleCategories.add(cat.name);
+                    }
+                }
+            }
+        }
+
+        // From scheduled transactions
+        for (const t of expandedTransactions) {
+            if (t.category_name && t.category_name.startsWith(settings.flexiblePrefix)) {
+                flexibleCategories.add(t.category_name);
+            }
+        }
+
+        const categoryNames = Array.from(flexibleCategories).sort();
+
+        // Build rows for each month
+        const rows = [];
+        for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+            const monthDate = new Date(currentYear, monthIndex, 1);
+            const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+            const isPast = monthIndex < currentMonthIndex;
+            const isCurrent = monthIndex === currentMonthIndex;
+
+            const ynabMonth = data.months.find(m => m.month === monthStr);
+            const hasMonthData = ynabMonth && ynabMonth.categories && ynabMonth.categories.length > 0;
+
+            const categoryAmounts = {};
+            let rowTotal = 0;
+
+            for (const catName of categoryNames) {
+                let amount = 0;
+
+                if ((isPast || isCurrent) && hasMonthData) {
+                    // Use budgeted amount from YNAB
+                    const cat = ynabMonth.categories.find(c => c.name === catName);
+                    if (cat) {
+                        amount = (cat.budgeted || 0) / 1000;
+                    }
+                } else if (!isPast && !isCurrent) {
+                    // Future months: use scheduled transactions
+                    // Include both expenses (negative) and refunds (positive) - refunds reduce the total
+                    amount = expandedTransactions
+                        .filter(t =>
+                            t.occurrence_month === monthIndex &&
+                            t.occurrence_year === currentYear &&
+                            t.category_name === catName
+                        )
+                        .reduce((sum, t) => sum + t.amount, 0) / -1000;
+                }
+
+                categoryAmounts[catName] = amount;
+                rowTotal += amount;
+            }
+
+            rows.push({
+                month: monthDate.toLocaleDateString('en-US', { month: 'short' }),
+                isPast,
+                isCurrent,
+                categoryAmounts,
+                total: rowTotal
+            });
+        }
+
+        // Calculate column totals
+        const columnTotals = {};
+        for (const catName of categoryNames) {
+            columnTotals[catName] = rows.reduce((sum, row) => sum + row.categoryAmounts[catName], 0);
+        }
+        const grandTotal = rows.reduce((sum, row) => sum + row.total, 0);
+
+        return { categoryNames, rows, columnTotals, grandTotal };
+    }
+
+    // Render the category breakdown table
+    function renderCategoryTable(data, settings) {
+        const container = document.getElementById('categoryTableContainer');
+        const breakdown = calculateCategoryBreakdown(data, settings);
+
+        if (breakdown.categoryNames.length === 0) {
+            container.innerHTML = `
+                <p class="no-data">No flexible categories found. Categories must start with "${settings.flexiblePrefix}" to appear here.</p>
+            `;
+            return;
+        }
+
+        // Strip prefix for cleaner display
+        const displayName = (name) => name.replace(settings.flexiblePrefix, '').trim();
+
+        const formatVal = (val) => val === 0 ? '—' : new Intl.NumberFormat('en-IE', {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(val);
+
+        const tableHtml = `
+            <div class="category-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            ${breakdown.categoryNames.map(name => `<th>${displayName(name)}</th>`).join('')}
+                            <th class="total-col">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${breakdown.rows.map(row => {
+                            let rowClass = [];
+                            if (row.isPast) rowClass.push('past-month');
+                            if (row.isCurrent) rowClass.push('current-month');
+
+                            return `
+                                <tr class="${rowClass.join(' ')}">
+                                    <td>${row.month}</td>
+                                    ${breakdown.categoryNames.map(name =>
+                                        `<td>${formatVal(row.categoryAmounts[name])}</td>`
+                                    ).join('')}
+                                    <td class="total-col">${formatVal(row.total)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td>Total</td>
+                            ${breakdown.categoryNames.map(name =>
+                                `<td>${formatVal(breakdown.columnTotals[name])}</td>`
+                            ).join('')}
+                            <td class="total-col">${formatVal(breakdown.grandTotal)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
+
+        container.innerHTML = tableHtml;
+    }
+
+    // ============================================================
+    // CATEGORY DETAILS TAB
+    // ============================================================
+
+    // Store data reference for category details rendering
+    let _categoryDetailsData = null;
+
+    // Calculate category details for a specific month
+    function calculateCategoryDetails(data, settings, monthIndex) {
+        const currentYear = new Date().getFullYear();
+        const currentMonthIndex = new Date().getMonth();
+        const today = new Date();
+        const todayDay = today.getDate();
+        const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+
+        const ynabMonth = data.months.find(m => m.month === monthStr);
+        const hasMonthData = ynabMonth && ynabMonth.categories && ynabMonth.categories.length > 0;
+
+        // Expand scheduled transactions
+        const { expanded: expandedTransactions } =
+            expandScheduledTransactions(data.scheduledTransactions, currentYear);
+
+        // Build a lookup from category name to category group from ALL YNAB months
+        const categoryGroupLookup = {};
+        for (const month of data.months) {
+            if (month.categories) {
+                for (const cat of month.categories) {
+                    if (!categoryGroupLookup[cat.name]) {
+                        categoryGroupLookup[cat.name] = cat.category_group_name || 'Unknown';
+                    }
+                }
+            }
+        }
+
+        // Collect ALL flexible category names from all sources
+        const flexibleCategories = new Set();
+
+        // From all YNAB months
+        for (const month of data.months) {
+            if (month.categories) {
+                for (const cat of month.categories) {
+                    if (cat.name.startsWith(settings.flexiblePrefix)) {
+                        flexibleCategories.add(cat.name);
+                    }
+                }
+            }
+        }
+
+        // From scheduled transactions
+        for (const t of expandedTransactions) {
+            if (t.category_name && t.category_name.startsWith(settings.flexiblePrefix)) {
+                flexibleCategories.add(t.category_name);
+            }
+        }
+
+        const results = [];
+        const isPast = monthIndex < currentMonthIndex;
+        const isCurrent = monthIndex === currentMonthIndex;
+        const isFuture = monthIndex > currentMonthIndex;
+
+        // Process each known flexible category
+        for (const catName of flexibleCategories) {
+            let amount = 0;
+            let budgeted = 0;
+            let hasMismatch = false;
+
+            // Get YNAB category data if available
+            const ynabCat = hasMonthData
+                ? ynabMonth.categories.find(c => c.name === catName)
+                : null;
+
+            if (isPast) {
+                // Past months: show actual transactions (activity)
+                // Sum raw activity (negative = expense, positive = refund) - refunds reduce the total
+                const activity = ynabCat ? (ynabCat.activity || 0) / -1000 : 0;
+                budgeted = ynabCat ? (ynabCat.budgeted || 0) / 1000 : 0;
+                amount = activity;
+                hasMismatch = Math.abs(budgeted - amount) > 0.01;
+            } else if (isCurrent) {
+                // Current month: actual activity + scheduled transactions still to come
+                // Sum raw activity (negative = expense, positive = refund) - refunds reduce the total
+                const activity = ynabCat ? (ynabCat.activity || 0) / -1000 : 0;
+                budgeted = ynabCat ? (ynabCat.budgeted || 0) / 1000 : 0;
+
+                // Only include scheduled transactions that haven't occurred yet (date >= today)
+                // Include both expenses and refunds - refunds reduce the total
+                const remainingScheduled = expandedTransactions
+                    .filter(t => {
+                        if (t.occurrence_month !== monthIndex) return false;
+                        if (t.occurrence_year !== currentYear) return false;
+                        if (t.category_name !== catName) return false;
+                        // For current month, only include if the day hasn't passed yet
+                        const txDay = new Date(t.date_next).getDate();
+                        return txDay >= todayDay;
+                    })
+                    .reduce((sum, t) => sum + t.amount, 0) / -1000;
+
+                amount = activity + remainingScheduled;
+                hasMismatch = Math.abs(budgeted - amount) > 0.01;
+            } else {
+                // Future months: scheduled only
+                // Include both expenses and refunds - refunds reduce the total
+                const scheduledAmount = expandedTransactions
+                    .filter(t =>
+                        t.occurrence_month === monthIndex &&
+                        t.occurrence_year === currentYear &&
+                        t.category_name === catName
+                    )
+                    .reduce((sum, t) => sum + t.amount, 0) / -1000;
+
+                amount = scheduledAmount;
+                budgeted = ynabCat ? (ynabCat.budgeted || 0) / 1000 : 0;
+                hasMismatch = Math.abs(budgeted - amount) > 0.01;
+            }
+
+            const displayName = catName.replace(settings.flexiblePrefix, '').trim();
+            const categoryGroup = categoryGroupLookup[catName] || 'Unknown';
+
+            results.push({
+                categoryGroup,
+                categoryName: displayName,
+                amount,
+                budgeted,
+                hasMismatch,
+                isFuture
+            });
+        }
+
+        // Sort by category group, then category name
+        results.sort((a, b) => {
+            if (a.categoryGroup !== b.categoryGroup) {
+                return a.categoryGroup.localeCompare(b.categoryGroup);
+            }
+            return a.categoryName.localeCompare(b.categoryName);
+        });
+
+        return results;
+    }
+
+    // Render category details table
+    function renderCategoryDetails(data, settings, monthIndex, hideEmpty) {
+        const container = document.getElementById('categoryDetailsContainer');
+        const details = calculateCategoryDetails(data, settings, monthIndex);
+
+        // Filter out zero-amount rows if hideEmpty is true
+        const filteredDetails = hideEmpty
+            ? details.filter(d => Math.abs(d.amount) > 0.01)
+            : details;
+
+        if (filteredDetails.length === 0) {
+            const message = hideEmpty
+                ? 'No categories with amounts for this month.'
+                : `No flexible categories found. Categories must start with "${settings.flexiblePrefix}" to appear here.`;
+            container.innerHTML = `<div class="empty-state">${message}</div>`;
+            return;
+        }
+
+        const formatVal = (val) => new Intl.NumberFormat('en-IE', {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(val);
+
+        // Group by category group for display
+        let currentGroup = null;
+        let groupIndex = 0;
+        let tableRows = '';
+
+        for (const detail of filteredDetails) {
+            // Add group header if new group
+            if (detail.categoryGroup !== currentGroup) {
+                currentGroup = detail.categoryGroup;
+                groupIndex++;
+                tableRows += `
+                    <tr class="group-header">
+                        <td colspan="2">
+                            <button class="group-toggle" data-group="${groupIndex}">${currentGroup}</button>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            // Format amount cell with mismatch styling
+            let amountCell;
+            if (detail.hasMismatch) {
+                const tooltip = `Budgeted: ${formatVal(detail.budgeted)}`;
+                const cssClass = detail.isFuture ? 'mismatch-future' : 'mismatch';
+                amountCell = `<span class="${cssClass}" title="${tooltip}">${formatVal(detail.amount)}</span>`;
+            } else {
+                amountCell = formatVal(detail.amount);
+            }
+
+            tableRows += `
+                <tr class="group-row" data-group="${groupIndex}">
+                    <td style="padding-left: 1.5rem;">${detail.categoryName}</td>
+                    <td>${amountCell}</td>
+                </tr>
+            `;
+        }
+
+        // Calculate total
+        const total = filteredDetails.reduce((sum, d) => sum + d.amount, 0);
+
+        container.innerHTML = `
+            <table class="category-details-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableRows}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td><strong>Total</strong></td>
+                        <td><strong>${formatVal(total)}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        `;
+
+        // Add click handlers for collapsible groups
+        container.querySelectorAll('.group-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const groupId = btn.dataset.group;
+                const isCollapsed = btn.classList.toggle('collapsed');
+                container.querySelectorAll(`.group-row[data-group="${groupId}"]`).forEach(row => {
+                    row.classList.toggle('hidden', isCollapsed);
+                });
+            });
+        });
+    }
+
+    // Initialize category details tab
+    function initCategoryDetailsTab() {
+        const monthSelect = document.getElementById('categoryDetailsMonth');
+        const hideEmptyCheckbox = document.getElementById('hideEmptyCategories');
+
+        // Set default to current month
+        const currentMonth = new Date().getMonth();
+        monthSelect.value = currentMonth.toString();
+
+        // Re-render on filter changes
+        const handleFilterChange = () => {
+            if (!_categoryDetailsData) return;
+            const settings = loadSettings();
+            const monthIndex = parseInt(monthSelect.value, 10);
+            const hideEmpty = hideEmptyCheckbox.checked;
+            renderCategoryDetails(_categoryDetailsData, settings, monthIndex, hideEmpty);
+        };
+
+        monthSelect.addEventListener('change', handleFilterChange);
+        hideEmptyCheckbox.addEventListener('change', handleFilterChange);
+    }
+
+    // ============================================================
+    // TRANSACTIONS TAB
+    // ============================================================
+
+    // Store transactions data for tab re-rendering
+    let _transactionsData = null;
+
+    function renderTransactions(data, settings, monthIndex) {
+        const container = document.getElementById('transactionsContainer');
+        const currentYear = new Date().getFullYear();
+        const today = new Date();
+        const currentMonthIndex = today.getMonth();
+        const todayDay = today.getDate();
+
+        // Expand scheduled transactions
+        const { expanded: expandedTransactions } =
+            expandScheduledTransactions(data.scheduledTransactions, currentYear);
+
+        // Combine actual and scheduled transactions for the selected month
+        const allTransactions = [];
+
+        // Helper to check if transaction is a transfer (should be ignored)
+        const isTransfer = (t) => {
+            const category = t.category_name || '';
+            const payee = t.payee_name || '';
+            return category === 'Uncategorized' && payee.startsWith('Transfer');
+        };
+
+        // Helper to check if transaction should be included
+        // Include: flexible transactions OR income
+        const shouldInclude = (t) => {
+            const category = t.category_name || '';
+            const isFlexible = category.startsWith(settings.flexiblePrefix);
+            const isIncome = category === 'Inflow: Ready to Assign';
+            return isFlexible || isIncome;
+        };
+
+        // 1. Actual transactions from YNAB
+        const actualTxns = (data.transactions || []).filter(t => {
+            const txDate = new Date(t.date);
+            return txDate.getMonth() === monthIndex &&
+                   txDate.getFullYear() === currentYear &&
+                   !isTransfer(t) &&
+                   shouldInclude(t);
+        });
+
+        for (const t of actualTxns) {
+            allTransactions.push({
+                date: t.date,
+                day: new Date(t.date).getDate(),
+                when: 'Past',
+                category: t.category_name || '(Uncategorized)',
+                payee: t.payee_name || '(No payee)',
+                amount: t.amount / 1000,
+                source: 'actual'
+            });
+        }
+
+        // 2. Scheduled transactions for the selected month
+        const scheduledForMonth = expandedTransactions.filter(t =>
+            t.occurrence_month === monthIndex &&
+            t.occurrence_year === currentYear &&
+            !isTransfer(t) &&
+            shouldInclude(t)
+        );
+
+        for (const t of scheduledForMonth) {
+            // Determine when: Past or Future
+            let when;
+            if (monthIndex < currentMonthIndex) {
+                // Past month - all scheduled would be "Past"
+                when = 'Past';
+            } else if (monthIndex > currentMonthIndex) {
+                // Future month - all scheduled are "Future"
+                when = 'Future';
+            } else {
+                // Current month - check day
+                const txDay = new Date(t.date_next).getDate();
+                when = txDay < todayDay ? 'Past' : 'Future';
+            }
+
+            allTransactions.push({
+                date: t.date_next,
+                day: new Date(t.date_next).getDate(),
+                when: when,
+                category: t.category_name || '(Uncategorized)',
+                payee: t.payee_name || '(No payee)',
+                amount: t.amount / 1000,
+                source: 'scheduled'
+            });
+        }
+
+        // Sort by day of month
+        allTransactions.sort((a, b) => a.day - b.day);
+
+        if (allTransactions.length === 0) {
+            container.innerHTML = '<div class="empty-state">No transactions for this month</div>';
+            return;
+        }
+
+        // Classify transaction type
+        const classifyType = (tx) => {
+            if (tx.amount > 0 && tx.category === 'Inflow: Ready to Assign') {
+                return 'Income';
+            } else if (tx.amount > 0) {
+                return 'Refund';
+            } else {
+                return 'Transaction';
+            }
+        };
+
+        // Build table rows
+        let tableRows = '';
+        for (const tx of allTransactions) {
+            const type = classifyType(tx);
+            const amountClass = tx.amount >= 0 ? 'positive' : 'negative';
+            const sourceIndicator = tx.source === 'scheduled' ? ' 📅' : '';
+
+            tableRows += `
+                <tr>
+                    <td>${tx.when}${sourceIndicator}</td>
+                    <td>${type}</td>
+                    <td>${tx.category}</td>
+                    <td>${tx.payee}</td>
+                    <td class="${amountClass}">${formatCurrency(tx.amount)}</td>
+                </tr>
+            `;
+        }
+
+        // Calculate totals
+        const totalIncome = allTransactions
+            .filter(tx => classifyType(tx) === 'Income')
+            .reduce((sum, tx) => sum + tx.amount, 0);
+        const totalRefunds = allTransactions
+            .filter(tx => classifyType(tx) === 'Refund')
+            .reduce((sum, tx) => sum + tx.amount, 0);
+        const totalExpenses = allTransactions
+            .filter(tx => classifyType(tx) === 'Transaction')
+            .reduce((sum, tx) => sum + tx.amount, 0);
+        const netTotal = totalIncome + totalRefunds + totalExpenses;
+
+        container.innerHTML = `
+            <table class="category-details-table">
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Type</th>
+                        <th>Category</th>
+                        <th>Payee</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableRows}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4"><strong>Income</strong></td>
+                        <td class="positive"><strong>${formatCurrency(totalIncome)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4"><strong>Refunds</strong></td>
+                        <td class="positive"><strong>${formatCurrency(totalRefunds)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4"><strong>Expenses</strong></td>
+                        <td class="negative"><strong>${formatCurrency(totalExpenses)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4"><strong>Net</strong></td>
+                        <td class="${netTotal >= 0 ? 'positive' : 'negative'}"><strong>${formatCurrency(netTotal)}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        `;
+    }
+
+    // Initialize transactions tab
+    function initTransactionsTab() {
+        const monthSelect = document.getElementById('transactionsMonth');
+
+        // Set default to current month
+        const currentMonth = new Date().getMonth();
+        monthSelect.value = currentMonth.toString();
+
+        // Re-render on month change
+        monthSelect.addEventListener('change', () => {
+            if (!_transactionsData) return;
+            const settings = loadSettings();
+            const monthIndex = parseInt(monthSelect.value, 10);
+            renderTransactions(_transactionsData, settings, monthIndex);
+        });
+    }
+
+    // ============================================================
+    // TAB NAVIGATION
+    // ============================================================
+
+    function initTabs() {
+        const tabNav = document.getElementById('tabNav');
+        const buttons = tabNav.querySelectorAll('button');
+
+        buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Update active button
+                buttons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Update active tab content
+                const tabId = btn.dataset.tab;
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.getElementById(`tab-${tabId}`).classList.add('active');
+            });
+        });
+    }
+
+    // ============================================================
     // MAIN REFRESH FLOW
     // ============================================================
 
@@ -1130,12 +2851,31 @@
         try {
             const data = await fetchYnabData(settings);
             _debugData = data; // Store for debugging
+            _categoryDetailsData = data; // Store for category details tab
+            _transactionsData = data; // Store for transactions tab
             const rows = calculateMonthlyRows(data, settings);
             renderSummaryCards(rows, settings);
             renderWarnings(data._warnings);
             renderTable(rows, settings);
+            renderCategoryTable(data, settings);
+
+            // Render category details tab with current filters
+            const monthSelect = document.getElementById('categoryDetailsMonth');
+            const hideEmptyCheckbox = document.getElementById('hideEmptyCategories');
+            const monthIndex = parseInt(monthSelect.value, 10);
+            const hideEmpty = hideEmptyCheckbox.checked;
+            renderCategoryDetails(data, settings, monthIndex, hideEmpty);
+
+            // Render transactions tab with current month selection
+            const txMonthSelect = document.getElementById('transactionsMonth');
+            const txMonthIndex = parseInt(txMonthSelect.value, 10);
+            renderTransactions(data, settings, txMonthIndex);
+
             updateStatusWithWarnings(rows);
             updateLastRefreshed();
+
+            // Show tab navigation after data loads
+            document.getElementById('tabNav').style.display = 'flex';
         } catch (error) {
             // Handle specific API errors with helpful messages
             if (error instanceof YnabApiError && (error.type === 'auth' || error.type === 'not_found')) {
@@ -1161,6 +2901,15 @@
 
         // Check if settings are complete
         checkSettingsComplete();
+
+        // Initialize tab navigation
+        initTabs();
+
+        // Initialize category details tab
+        initCategoryDetailsTab();
+
+        // Initialize transactions tab
+        initTransactionsTab();
 
         // Event listeners
         document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
