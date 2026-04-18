@@ -316,50 +316,6 @@
             display: block;
         }
 
-        .category-table {
-            width: 100%;
-            overflow-x: auto;
-            font-size: 0.9rem;
-        }
-
-        .category-table th,
-        .category-table td {
-            text-align: right;
-            padding: 0.5rem;
-            white-space: nowrap;
-        }
-
-        .category-table th:first-child,
-        .category-table td:first-child {
-            text-align: left;
-            position: sticky;
-            left: 0;
-            background: var(--pico-background-color);
-        }
-
-        .category-table thead th {
-            font-size: 0.8rem;
-        }
-
-        .category-table tr.past-month {
-            opacity: var(--past-month-opacity);
-        }
-
-        .category-table tr.current-month {
-            background: var(--current-month-bg);
-        }
-
-        .category-table .total-col {
-            font-weight: 600;
-            border-left: 2px solid var(--pico-muted-border-color);
-        }
-
-        .category-table tfoot td {
-            font-weight: 600;
-            border-top: 2px solid var(--pico-muted-border-color);
-        }
-
-        /* Category Details Tab */
         .filter-row {
             display: flex;
             gap: 1rem;
@@ -389,77 +345,39 @@
             min-width: 1.25rem;
         }
 
-        .category-details-table {
+        .transactions-table {
             width: 100%;
             font-size: 0.9rem;
         }
 
-        .category-details-table th,
-        .category-details-table td {
+        .transactions-table th,
+        .transactions-table td {
             padding: 0.5rem 0.75rem;
         }
 
-        .category-details-table th:last-child,
-        .category-details-table td:last-child {
+        .transactions-table th:last-child,
+        .transactions-table td:last-child {
             text-align: right;
-        }
-
-        .category-details-table .mismatch {
-            color: var(--negative-color);
-            font-weight: 600;
-            cursor: help;
-        }
-
-        .category-details-table .mismatch-future {
-            color: #f87171;
-            font-weight: 600;
-            cursor: help;
-        }
-
-        .category-details-table .group-header td {
-            background: var(--pico-muted-border-color);
-            font-weight: 600;
-            padding: 0;
-        }
-
-        .category-details-table .group-toggle {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            width: 100%;
-            padding: 0.75rem;
-            background: none;
-            border: none;
-            font-weight: 600;
-            font-size: inherit;
-            text-align: left;
-            cursor: pointer;
-            color: inherit;
-        }
-
-        .category-details-table .group-toggle:hover {
-            background: var(--pico-muted-color);
-            background-opacity: 0.1;
-        }
-
-        .category-details-table .group-toggle::before {
-            content: '▼';
-            font-size: 0.7rem;
-            transition: transform 0.2s;
-        }
-
-        .category-details-table .group-toggle.collapsed::before {
-            transform: rotate(-90deg);
-        }
-
-        .category-details-table .group-row.hidden {
-            display: none;
         }
 
         .empty-state {
             color: var(--pico-muted-color);
             text-align: center;
             padding: 2rem;
+        }
+
+        /* Mobile: show only Month, Income, Closing Balance, Headroom */
+        @media (max-width: 768px) {
+            .budget-table th:nth-child(3),
+            .budget-table td:nth-child(3),
+            .budget-table th:nth-child(4),
+            .budget-table td:nth-child(4),
+            .budget-table th:nth-child(5),
+            .budget-table td:nth-child(5),
+            .budget-table th:nth-child(6),
+            .budget-table td:nth-child(6) {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -511,8 +429,6 @@
         <!-- Tab Navigation -->
         <nav class="tab-nav" id="tabNav" style="display: none;">
             <button class="active" data-tab="overview">Overview</button>
-            <button data-tab="categories">Flexible by Category</button>
-            <button data-tab="category-details">Category Details</button>
             <button data-tab="transactions">Transactions</button>
         </nav>
 
@@ -532,36 +448,6 @@
                     <button type="button" id="openSettingsBtn" class="outline">Open Settings</button>
                 </div>
             </div>
-        </div>
-
-        <!-- Categories Tab -->
-        <div id="tab-categories" class="tab-content">
-            <div id="categoryTableContainer"></div>
-        </div>
-
-        <!-- Category Details Tab -->
-        <div id="tab-category-details" class="tab-content">
-            <div class="filter-row">
-                <select id="categoryDetailsMonth">
-                    <option value="0">January</option>
-                    <option value="1">February</option>
-                    <option value="2">March</option>
-                    <option value="3">April</option>
-                    <option value="4">May</option>
-                    <option value="5">June</option>
-                    <option value="6">July</option>
-                    <option value="7">August</option>
-                    <option value="8">September</option>
-                    <option value="9">October</option>
-                    <option value="10">November</option>
-                    <option value="11">December</option>
-                </select>
-                <label>
-                    <input type="checkbox" id="hideEmptyCategories">
-                    Hide empty categories
-                </label>
-            </div>
-            <div id="categoryDetailsContainer"></div>
         </div>
 
         <!-- Transactions Tab -->
@@ -2199,423 +2085,6 @@
     }
 
     // ============================================================
-    // CATEGORY BREAKDOWN TABLE
-    // ============================================================
-
-    // Calculate flexible expenses per category per month
-    function calculateCategoryBreakdown(data, settings) {
-        const currentYear = new Date().getFullYear();
-        const currentMonthIndex = new Date().getMonth();
-
-        // Expand scheduled transactions
-        const { expanded: expandedTransactions } =
-            expandScheduledTransactions(data.scheduledTransactions, currentYear);
-
-        // Collect all flexible category names
-        const flexibleCategories = new Set();
-
-        // From YNAB month data
-        for (const month of data.months) {
-            if (month.categories) {
-                for (const cat of month.categories) {
-                    if (cat.name.startsWith(settings.flexiblePrefix)) {
-                        flexibleCategories.add(cat.name);
-                    }
-                }
-            }
-        }
-
-        // From scheduled transactions
-        for (const t of expandedTransactions) {
-            if (t.category_name && t.category_name.startsWith(settings.flexiblePrefix)) {
-                flexibleCategories.add(t.category_name);
-            }
-        }
-
-        const categoryNames = Array.from(flexibleCategories).sort();
-
-        // Build rows for each month
-        const rows = [];
-        for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
-            const monthDate = new Date(currentYear, monthIndex, 1);
-            const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
-            const isPast = monthIndex < currentMonthIndex;
-            const isCurrent = monthIndex === currentMonthIndex;
-
-            const ynabMonth = data.months.find(m => m.month === monthStr);
-            const hasMonthData = ynabMonth && ynabMonth.categories && ynabMonth.categories.length > 0;
-
-            const categoryAmounts = {};
-            let rowTotal = 0;
-
-            for (const catName of categoryNames) {
-                let amount = 0;
-
-                if ((isPast || isCurrent) && hasMonthData) {
-                    // Use budgeted amount from YNAB
-                    const cat = ynabMonth.categories.find(c => c.name === catName);
-                    if (cat) {
-                        amount = (cat.budgeted || 0) / 1000;
-                    }
-                } else if (!isPast && !isCurrent) {
-                    // Future months: use scheduled transactions
-                    // Include both expenses (negative) and refunds (positive) - refunds reduce the total
-                    amount = expandedTransactions
-                        .filter(t =>
-                            t.occurrence_month === monthIndex &&
-                            t.occurrence_year === currentYear &&
-                            t.category_name === catName
-                        )
-                        .reduce((sum, t) => sum + t.amount, 0) / -1000;
-                }
-
-                categoryAmounts[catName] = amount;
-                rowTotal += amount;
-            }
-
-            rows.push({
-                month: monthDate.toLocaleDateString('en-US', { month: 'short' }),
-                isPast,
-                isCurrent,
-                categoryAmounts,
-                total: rowTotal
-            });
-        }
-
-        // Calculate column totals
-        const columnTotals = {};
-        for (const catName of categoryNames) {
-            columnTotals[catName] = rows.reduce((sum, row) => sum + row.categoryAmounts[catName], 0);
-        }
-        const grandTotal = rows.reduce((sum, row) => sum + row.total, 0);
-
-        return { categoryNames, rows, columnTotals, grandTotal };
-    }
-
-    // Render the category breakdown table
-    function renderCategoryTable(data, settings) {
-        const container = document.getElementById('categoryTableContainer');
-        const breakdown = calculateCategoryBreakdown(data, settings);
-
-        if (breakdown.categoryNames.length === 0) {
-            container.innerHTML = `
-                <p class="no-data">No flexible categories found. Categories must start with "${settings.flexiblePrefix}" to appear here.</p>
-            `;
-            return;
-        }
-
-        // Strip prefix for cleaner display
-        const displayName = (name) => name.replace(settings.flexiblePrefix, '').trim();
-
-        const formatVal = (val) => val === 0 ? '—' : new Intl.NumberFormat('en-IE', {
-            style: 'currency',
-            currency: 'EUR',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(val);
-
-        const tableHtml = `
-            <div class="category-table">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Month</th>
-                            ${breakdown.categoryNames.map(name => `<th>${displayName(name)}</th>`).join('')}
-                            <th class="total-col">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${breakdown.rows.map(row => {
-                            let rowClass = [];
-                            if (row.isPast) rowClass.push('past-month');
-                            if (row.isCurrent) rowClass.push('current-month');
-
-                            return `
-                                <tr class="${rowClass.join(' ')}">
-                                    <td>${row.month}</td>
-                                    ${breakdown.categoryNames.map(name =>
-                                        `<td>${formatVal(row.categoryAmounts[name])}</td>`
-                                    ).join('')}
-                                    <td class="total-col">${formatVal(row.total)}</td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td>Total</td>
-                            ${breakdown.categoryNames.map(name =>
-                                `<td>${formatVal(breakdown.columnTotals[name])}</td>`
-                            ).join('')}
-                            <td class="total-col">${formatVal(breakdown.grandTotal)}</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        `;
-
-        container.innerHTML = tableHtml;
-    }
-
-    // ============================================================
-    // CATEGORY DETAILS TAB
-    // ============================================================
-
-    // Store data reference for category details rendering
-    let _categoryDetailsData = null;
-
-    // Calculate category details for a specific month
-    function calculateCategoryDetails(data, settings, monthIndex) {
-        const currentYear = new Date().getFullYear();
-        const currentMonthIndex = new Date().getMonth();
-        const today = new Date();
-        const todayDay = today.getDate();
-        const monthStr = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
-
-        const ynabMonth = data.months.find(m => m.month === monthStr);
-        const hasMonthData = ynabMonth && ynabMonth.categories && ynabMonth.categories.length > 0;
-
-        // Expand scheduled transactions
-        const { expanded: expandedTransactions } =
-            expandScheduledTransactions(data.scheduledTransactions, currentYear);
-
-        // Build a lookup from category name to category group from ALL YNAB months
-        const categoryGroupLookup = {};
-        for (const month of data.months) {
-            if (month.categories) {
-                for (const cat of month.categories) {
-                    if (!categoryGroupLookup[cat.name]) {
-                        categoryGroupLookup[cat.name] = cat.category_group_name || 'Unknown';
-                    }
-                }
-            }
-        }
-
-        // Collect ALL flexible category names from all sources
-        const flexibleCategories = new Set();
-
-        // From all YNAB months
-        for (const month of data.months) {
-            if (month.categories) {
-                for (const cat of month.categories) {
-                    if (cat.name.startsWith(settings.flexiblePrefix)) {
-                        flexibleCategories.add(cat.name);
-                    }
-                }
-            }
-        }
-
-        // From scheduled transactions
-        for (const t of expandedTransactions) {
-            if (t.category_name && t.category_name.startsWith(settings.flexiblePrefix)) {
-                flexibleCategories.add(t.category_name);
-            }
-        }
-
-        const results = [];
-        const isPast = monthIndex < currentMonthIndex;
-        const isCurrent = monthIndex === currentMonthIndex;
-        const isFuture = monthIndex > currentMonthIndex;
-
-        // Process each known flexible category
-        for (const catName of flexibleCategories) {
-            let amount = 0;
-            let budgeted = 0;
-            let hasMismatch = false;
-
-            // Get YNAB category data if available
-            const ynabCat = hasMonthData
-                ? ynabMonth.categories.find(c => c.name === catName)
-                : null;
-
-            if (isPast) {
-                // Past months: show actual transactions (activity)
-                // Sum raw activity (negative = expense, positive = refund) - refunds reduce the total
-                const activity = ynabCat ? (ynabCat.activity || 0) / -1000 : 0;
-                budgeted = ynabCat ? (ynabCat.budgeted || 0) / 1000 : 0;
-                amount = activity;
-                hasMismatch = Math.abs(budgeted - amount) > 0.01;
-            } else if (isCurrent) {
-                // Current month: actual activity + scheduled transactions still to come
-                // Sum raw activity (negative = expense, positive = refund) - refunds reduce the total
-                const activity = ynabCat ? (ynabCat.activity || 0) / -1000 : 0;
-                budgeted = ynabCat ? (ynabCat.budgeted || 0) / 1000 : 0;
-
-                // Only include scheduled transactions that haven't occurred yet (date >= today)
-                // Include both expenses and refunds - refunds reduce the total
-                const remainingScheduled = expandedTransactions
-                    .filter(t => {
-                        if (t.occurrence_month !== monthIndex) return false;
-                        if (t.occurrence_year !== currentYear) return false;
-                        if (t.category_name !== catName) return false;
-                        // For current month, only include if the day hasn't passed yet
-                        const txDay = new Date(t.date_next).getDate();
-                        return txDay >= todayDay;
-                    })
-                    .reduce((sum, t) => sum + t.amount, 0) / -1000;
-
-                amount = activity + remainingScheduled;
-                hasMismatch = Math.abs(budgeted - amount) > 0.01;
-            } else {
-                // Future months: scheduled only
-                // Include both expenses and refunds - refunds reduce the total
-                const scheduledAmount = expandedTransactions
-                    .filter(t =>
-                        t.occurrence_month === monthIndex &&
-                        t.occurrence_year === currentYear &&
-                        t.category_name === catName
-                    )
-                    .reduce((sum, t) => sum + t.amount, 0) / -1000;
-
-                amount = scheduledAmount;
-                budgeted = ynabCat ? (ynabCat.budgeted || 0) / 1000 : 0;
-                hasMismatch = Math.abs(budgeted - amount) > 0.01;
-            }
-
-            const displayName = catName.replace(settings.flexiblePrefix, '').trim();
-            const categoryGroup = categoryGroupLookup[catName] || 'Unknown';
-
-            results.push({
-                categoryGroup,
-                categoryName: displayName,
-                amount,
-                budgeted,
-                hasMismatch,
-                isFuture
-            });
-        }
-
-        // Sort by category group, then category name
-        results.sort((a, b) => {
-            if (a.categoryGroup !== b.categoryGroup) {
-                return a.categoryGroup.localeCompare(b.categoryGroup);
-            }
-            return a.categoryName.localeCompare(b.categoryName);
-        });
-
-        return results;
-    }
-
-    // Render category details table
-    function renderCategoryDetails(data, settings, monthIndex, hideEmpty) {
-        const container = document.getElementById('categoryDetailsContainer');
-        const details = calculateCategoryDetails(data, settings, monthIndex);
-
-        // Filter out zero-amount rows if hideEmpty is true
-        const filteredDetails = hideEmpty
-            ? details.filter(d => Math.abs(d.amount) > 0.01)
-            : details;
-
-        if (filteredDetails.length === 0) {
-            const message = hideEmpty
-                ? 'No categories with amounts for this month.'
-                : `No flexible categories found. Categories must start with "${settings.flexiblePrefix}" to appear here.`;
-            container.innerHTML = `<div class="empty-state">${message}</div>`;
-            return;
-        }
-
-        const formatVal = (val) => new Intl.NumberFormat('en-IE', {
-            style: 'currency',
-            currency: 'EUR',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(val);
-
-        // Group by category group for display
-        let currentGroup = null;
-        let groupIndex = 0;
-        let tableRows = '';
-
-        for (const detail of filteredDetails) {
-            // Add group header if new group
-            if (detail.categoryGroup !== currentGroup) {
-                currentGroup = detail.categoryGroup;
-                groupIndex++;
-                tableRows += `
-                    <tr class="group-header">
-                        <td colspan="2">
-                            <button class="group-toggle" data-group="${groupIndex}">${currentGroup}</button>
-                        </td>
-                    </tr>
-                `;
-            }
-
-            // Format amount cell with mismatch styling
-            let amountCell;
-            if (detail.hasMismatch) {
-                const tooltip = `Budgeted: ${formatVal(detail.budgeted)}`;
-                const cssClass = detail.isFuture ? 'mismatch-future' : 'mismatch';
-                amountCell = `<span class="${cssClass}" title="${tooltip}">${formatVal(detail.amount)}</span>`;
-            } else {
-                amountCell = formatVal(detail.amount);
-            }
-
-            tableRows += `
-                <tr class="group-row" data-group="${groupIndex}">
-                    <td style="padding-left: 1.5rem;">${detail.categoryName}</td>
-                    <td>${amountCell}</td>
-                </tr>
-            `;
-        }
-
-        // Calculate total
-        const total = filteredDetails.reduce((sum, d) => sum + d.amount, 0);
-
-        container.innerHTML = `
-            <table class="category-details-table">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${tableRows}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td><strong>Total</strong></td>
-                        <td><strong>${formatVal(total)}</strong></td>
-                    </tr>
-                </tfoot>
-            </table>
-        `;
-
-        // Add click handlers for collapsible groups
-        container.querySelectorAll('.group-toggle').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const groupId = btn.dataset.group;
-                const isCollapsed = btn.classList.toggle('collapsed');
-                container.querySelectorAll(`.group-row[data-group="${groupId}"]`).forEach(row => {
-                    row.classList.toggle('hidden', isCollapsed);
-                });
-            });
-        });
-    }
-
-    // Initialize category details tab
-    function initCategoryDetailsTab() {
-        const monthSelect = document.getElementById('categoryDetailsMonth');
-        const hideEmptyCheckbox = document.getElementById('hideEmptyCategories');
-
-        // Set default to current month
-        const currentMonth = new Date().getMonth();
-        monthSelect.value = currentMonth.toString();
-
-        // Re-render on filter changes
-        const handleFilterChange = () => {
-            if (!_categoryDetailsData) return;
-            const settings = loadSettings();
-            const monthIndex = parseInt(monthSelect.value, 10);
-            const hideEmpty = hideEmptyCheckbox.checked;
-            renderCategoryDetails(_categoryDetailsData, settings, monthIndex, hideEmpty);
-        };
-
-        monthSelect.addEventListener('change', handleFilterChange);
-        hideEmptyCheckbox.addEventListener('change', handleFilterChange);
-    }
-
-    // ============================================================
     // TRANSACTIONS TAB
     // ============================================================
 
@@ -2757,7 +2226,7 @@
         const netTotal = totalIncome + totalRefunds + totalExpenses;
 
         container.innerHTML = `
-            <table class="category-details-table">
+            <table class="transactions-table">
                 <thead>
                     <tr>
                         <th>When</th>
@@ -2851,20 +2320,11 @@
         try {
             const data = await fetchYnabData(settings);
             _debugData = data; // Store for debugging
-            _categoryDetailsData = data; // Store for category details tab
             _transactionsData = data; // Store for transactions tab
             const rows = calculateMonthlyRows(data, settings);
             renderSummaryCards(rows, settings);
             renderWarnings(data._warnings);
             renderTable(rows, settings);
-            renderCategoryTable(data, settings);
-
-            // Render category details tab with current filters
-            const monthSelect = document.getElementById('categoryDetailsMonth');
-            const hideEmptyCheckbox = document.getElementById('hideEmptyCategories');
-            const monthIndex = parseInt(monthSelect.value, 10);
-            const hideEmpty = hideEmptyCheckbox.checked;
-            renderCategoryDetails(data, settings, monthIndex, hideEmpty);
 
             // Render transactions tab with current month selection
             const txMonthSelect = document.getElementById('transactionsMonth');
@@ -2904,9 +2364,6 @@
 
         // Initialize tab navigation
         initTabs();
-
-        // Initialize category details tab
-        initCategoryDetailsTab();
 
         // Initialize transactions tab
         initTransactionsTab();
