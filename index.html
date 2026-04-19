@@ -33,6 +33,26 @@
             --positive-color: #16a34a;
             --negative-color: #dc2626;
             --amber-color: #d97706;
+            --card-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.12);
+        }
+
+        [data-theme="dark"] {
+            --card-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        /* Smooth transitions for interactive elements */
+        button, a, tr, .summary-card, .collapse-icon {
+            transition: background-color 0.15s ease-out,
+                        box-shadow 0.15s ease-out,
+                        transform 0.15s ease-out,
+                        border-color 0.15s ease-out;
+        }
+
+        /* Tabular numbers for all data */
+        td, .value {
+            font-variant-numeric: tabular-nums;
         }
 
         .settings-panel {
@@ -127,37 +147,76 @@
         /* Summary Cards */
         .summary-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 0.75rem;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 1rem;
             margin-bottom: 1.5rem;
         }
 
         .summary-card {
-            padding: 0.75rem 1rem;
-            background: var(--pico-muted-border-color);
-            border-radius: var(--pico-border-radius);
+            padding: 1rem 1.25rem;
+            background: var(--pico-card-background-color);
+            border-radius: 10px;
             text-align: center;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--pico-muted-border-color);
+            cursor: default;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--card-shadow-hover);
         }
 
         .summary-card .label {
             font-size: 0.75rem;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
             color: var(--pico-muted-color);
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
         }
 
         .summary-card .value {
-            font-size: 1.1rem;
-            font-weight: 600;
+            font-size: 1.35rem;
+            font-weight: 700;
             font-variant-numeric: tabular-nums;
         }
 
+        .summary-card.positive .value {
+            color: var(--positive-color);
+        }
+
+        .summary-card.negative .value {
+            color: var(--negative-color);
+        }
+
         .summary-card.warning {
-            background: var(--float-warning-bg);
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .summary-card.warning .value {
+            color: var(--amber-color);
         }
 
         .summary-card.healthy {
             background: #dcfce7;
+            border-color: #22c55e;
+        }
+
+        .summary-card.healthy .value {
+            color: var(--positive-color);
+        }
+
+        [data-theme="dark"] .summary-card.warning {
+            background: rgba(245, 158, 11, 0.15);
+        }
+
+        [data-theme="dark"] .summary-card.healthy {
+            background: rgba(34, 197, 94, 0.15);
         }
 
         /* Table Header Actions */
@@ -174,14 +233,33 @@
             font-size: 0.85rem;
         }
 
+        .budget-table-wrapper {
+            overflow-x: auto;
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--pico-muted-border-color);
+        }
+
         .budget-table {
             width: 100%;
-            overflow-x: auto;
+            margin: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+
+        .budget-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
         .budget-table th {
             text-align: right;
             font-size: 0.85rem;
+            background: var(--pico-card-background-color);
+            border-bottom: 2px solid var(--pico-primary);
+            padding: 0.75rem 0.5rem;
+            font-weight: 600;
         }
 
         .budget-table th:first-child {
@@ -198,10 +276,21 @@
         .budget-table td {
             text-align: right;
             font-variant-numeric: tabular-nums;
+            padding: 0.65rem 0.5rem;
         }
 
         .budget-table td:first-child {
             text-align: left;
+            font-weight: 500;
+        }
+
+        /* Zebra striping */
+        .budget-table tbody tr:nth-child(even) {
+            background: var(--pico-card-sectioning-background-color);
+        }
+
+        .budget-table tbody tr:hover {
+            background: var(--pico-primary-focus) !important;
         }
 
         .budget-table tr.past-month {
@@ -209,8 +298,17 @@
         }
 
         .budget-table tr.current-month {
-            background: var(--current-month-bg);
-            border-left: 3px solid var(--current-month-border);
+            background: var(--current-month-bg) !important;
+            border-left: 4px solid var(--current-month-border);
+            font-weight: 600;
+        }
+
+        .budget-table tr.current-month td:first-child {
+            padding-left: calc(0.5rem - 4px);
+        }
+
+        [data-theme="dark"] .budget-table tr.current-month {
+            background: rgba(59, 130, 246, 0.15) !important;
         }
 
         .budget-table tr.boundary-row td {
@@ -219,6 +317,10 @@
 
         .budget-table tr.float-warning {
             background: var(--float-warning-bg) !important;
+        }
+
+        [data-theme="dark"] .budget-table tr.float-warning {
+            background: rgba(239, 68, 68, 0.15) !important;
         }
 
         .budget-table tr.float-warning .closing-balance {
@@ -345,19 +447,54 @@
             min-width: 1.25rem;
         }
 
+        .transactions-table-wrapper {
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--pico-muted-border-color);
+            overflow: hidden;
+        }
+
         .transactions-table {
             width: 100%;
             font-size: 0.9rem;
+            margin: 0;
+            border-collapse: collapse;
+        }
+
+        .transactions-table thead {
+            background: var(--pico-card-background-color);
+        }
+
+        .transactions-table th {
+            font-weight: 600;
+            border-bottom: 2px solid var(--pico-primary);
         }
 
         .transactions-table th,
         .transactions-table td {
-            padding: 0.5rem 0.75rem;
+            padding: 0.6rem 0.75rem;
         }
 
         .transactions-table th:last-child,
         .transactions-table td:last-child {
             text-align: right;
+        }
+
+        .transactions-table tbody tr:nth-child(even) {
+            background: var(--pico-card-sectioning-background-color);
+        }
+
+        .transactions-table tbody tr:hover {
+            background: var(--pico-primary-focus);
+        }
+
+        .transactions-table tfoot {
+            background: var(--pico-card-background-color);
+            border-top: 2px solid var(--pico-muted-border-color);
+        }
+
+        .transactions-table tfoot td {
+            padding: 0.5rem 0.75rem;
         }
 
         .empty-state {
@@ -378,12 +515,52 @@
             .budget-table td:nth-child(6) {
                 display: none;
             }
+
+            .summary-cards {
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: 0.75rem;
+            }
+
+            .summary-card {
+                padding: 0.75rem 1rem;
+            }
+
+            .summary-card .value {
+                font-size: 1.15rem;
+            }
+        }
+
+        /* Content fade-in animation */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .summary-cards,
+        .budget-table-wrapper,
+        .transactions-table-wrapper,
+        .projects-table-wrapper {
+            animation: fadeIn 0.3s ease-out;
         }
 
         /* Projects Tab */
+        .projects-table-wrapper {
+            border-radius: 8px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--pico-muted-border-color);
+            overflow: hidden;
+        }
+
         .projects-table {
             width: 100%;
             border-collapse: collapse;
+            margin: 0;
         }
 
         .projects-header {
@@ -404,33 +581,43 @@
             cursor: pointer;
             font-weight: bold;
             border-bottom: 1px solid var(--pico-muted-border-color);
+            border-left: 4px solid var(--pico-primary);
         }
 
         .group-header td {
-            padding: 0.75rem;
+            padding: 0.85rem 0.75rem;
         }
 
         .group-header:hover {
-            background: var(--pico-muted-border-color);
+            background: var(--pico-primary-focus);
         }
 
         .category-header {
             background: var(--pico-card-sectioning-background-color);
             cursor: pointer;
             border-bottom: 1px solid var(--pico-muted-border-color);
+            border-left: 4px solid var(--pico-secondary);
         }
 
         .category-header td {
-            padding: 0.5rem 0.75rem 0.5rem 2rem;
+            padding: 0.6rem 0.75rem 0.6rem 2rem;
         }
 
         .category-header:hover {
-            background: var(--pico-muted-border-color);
+            background: var(--pico-primary-focus);
+        }
+
+        .project-row {
+            border-left: 4px solid transparent;
         }
 
         .project-row td {
-            padding: 0.4rem 0.75rem;
+            padding: 0.5rem 0.75rem;
             font-size: 0.9rem;
+        }
+
+        .project-row:hover {
+            background: var(--pico-primary-focus);
         }
 
         .project-row td.date-col {
@@ -462,6 +649,13 @@
             width: 1.5rem;
             text-align: center;
             font-family: monospace;
+            font-weight: bold;
+            color: var(--pico-primary);
+            transition: transform 0.2s ease;
+        }
+
+        .collapse-icon.expanded {
+            transform: rotate(90deg);
         }
 
         .projects-table .amount-col {
@@ -471,6 +665,23 @@
 
         .projects-hidden {
             display: none;
+        }
+
+        /* Smooth reveal animation */
+        .category-header,
+        .project-row {
+            animation: fadeSlideIn 0.15s ease-out;
+        }
+
+        @keyframes fadeSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-4px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
     </style>
 </head>
@@ -848,15 +1059,20 @@
                 const budgeted = (cat.budgeted || 0) / 1000;
                 const activity = (cat.activity || 0) / 1000;
                 const isFlexible = cat.name.startsWith(settings.flexiblePrefix);
+                const isHighPriority = isHighPriorityFlexible(cat.name, settings.flexiblePrefix);
                 const hidden = cat.hidden ? ' [HIDDEN]' : '';
                 const deleted = cat.deleted ? ' [DELETED]' : '';
+                const priorityMarker = isHighPriority ? '🟢' : (isFlexible ? '🔴' : '  ');
 
-                console.log(`  ${isFlexible ? '🔵' : '  '} ${cat.name}${hidden}${deleted}: budgeted=${budgeted.toFixed(2)}, activity=${activity.toFixed(2)}`);
+                console.log(`  ${priorityMarker} ${cat.name}${hidden}${deleted}: budgeted=${budgeted.toFixed(2)}, activity=${activity.toFixed(2)}`);
 
                 totalBudgeted += budgeted;
                 totalActivity += activity;
             }
         }
+
+        console.log(`\n🟢 = High-priority flexible (1-5, included)`);
+        console.log(`🔴 = Low-priority flexible (6-9, excluded)`);
 
         console.log(`\n=== TOTALS ===`);
         console.log(`Total Budgeted (all categories): €${totalBudgeted.toFixed(2)}`);
@@ -867,23 +1083,26 @@
             .filter(cat => !cat.name.startsWith(settings.flexiblePrefix))
             .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
 
-        const flexibleBudgeted = categories
+        const flexibleBudgetedAll = categories
             .filter(cat => cat.name.startsWith(settings.flexiblePrefix))
             .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
 
-        const flexibleActivity = categories
-            .filter(cat => cat.name.startsWith(settings.flexiblePrefix))
+        const flexibleBudgetedHighPriority = categories
+            .filter(cat => isHighPriorityFlexible(cat.name, settings.flexiblePrefix))
+            .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
+
+        const flexibleActivityHighPriority = categories
+            .filter(cat => isHighPriorityFlexible(cat.name, settings.flexiblePrefix))
             .reduce((sum, cat) => sum + Math.abs(cat.activity || 0), 0) / 1000;
 
-        console.log(`\n=== CURRENT APP CALCULATION ===`);
+        console.log(`\n=== APP CALCULATION (priority 1-5 only) ===`);
         console.log(`Fixed (budgeted, non-flexible): €${fixedBudgeted.toFixed(2)}`);
-        console.log(`Flexible (activity, flexible): €${flexibleActivity.toFixed(2)}`);
-        console.log(`App Total Assigned: €${(fixedBudgeted + flexibleActivity).toFixed(2)}`);
+        console.log(`Flexible (budgeted, priority 1-5): €${flexibleBudgetedHighPriority.toFixed(2)}`);
+        console.log(`Flexible (activity, priority 1-5): €${flexibleActivityHighPriority.toFixed(2)}`);
 
-        console.log(`\n=== CORRECT "ASSIGNED" SHOULD BE ===`);
-        console.log(`Fixed (budgeted): €${fixedBudgeted.toFixed(2)}`);
-        console.log(`Flexible (budgeted): €${flexibleBudgeted.toFixed(2)}`);
-        console.log(`True Total Assigned: €${(fixedBudgeted + flexibleBudgeted).toFixed(2)}`);
+        console.log(`\n=== ALL FLEXIBLE (for reference) ===`);
+        console.log(`Flexible (budgeted, all priorities): €${flexibleBudgetedAll.toFixed(2)}`);
+        console.log(`Excluded (priority 6-9): €${(flexibleBudgetedAll - flexibleBudgetedHighPriority).toFixed(2)}`);
     };
 
     // Call this from browser console: debugScheduled()
@@ -1647,6 +1866,21 @@
         return { expanded, warnings };
     }
 
+    // Check if category is a high-priority flexible expense (priority 1-5)
+    // Category pattern: [emoji prefix][digit 1-9][name]
+    // Returns true for priorities 1-5, false for 6-9 or non-flexible
+    function isHighPriorityFlexible(categoryName, flexiblePrefix) {
+        if (!categoryName || !categoryName.startsWith(flexiblePrefix)) {
+            return false;
+        }
+        // Extract character after prefix - should be digit 1-9
+        const afterPrefix = categoryName.slice(flexiblePrefix.length);
+        const priorityChar = afterPrefix.charAt(0);
+        const priority = parseInt(priorityChar, 10);
+        // Include only priorities 1-5
+        return !isNaN(priority) && priority >= 1 && priority <= 5;
+    }
+
     // ============================================================
     // MONTHLY CALCULATIONS
     // ============================================================
@@ -1837,24 +2071,25 @@
             let flexibleTooltip = '';
 
             if (isPast && hasMonthData) {
-                // Past months: use budgeted amounts (visible categories only)
+                // Past months: use budgeted amounts (visible categories only, priority 1-5)
                 flexibleExpenses = ynabMonth.categories
-                    .filter(cat => cat.name.startsWith(settings.flexiblePrefix) && !cat.hidden)
+                    .filter(cat => isHighPriorityFlexible(cat.name, settings.flexiblePrefix) && !cat.hidden)
                     .reduce((sum, cat) => sum + (cat.budgeted || 0), 0) / 1000;
                 flexibleTooltip = 'Budgeted flexible expenses';
             } else if (isCurrent && hasMonthData) {
-                // Current month: actual activity + scheduled transactions still to come (visible categories only)
+                // Current month: actual activity + scheduled transactions still to come (visible categories only, priority 1-5)
                 // Sum raw amounts (negative = expense, positive = refund) and negate to get net expense
                 const actualFlexible = ynabMonth.categories
-                    .filter(cat => cat.name.startsWith(settings.flexiblePrefix) && !cat.hidden)
+                    .filter(cat => isHighPriorityFlexible(cat.name, settings.flexiblePrefix) && !cat.hidden)
                     .reduce((sum, cat) => sum + (cat.activity || 0), 0) / -1000;
                 const todayDay = today.getDate();
                 // Include both expenses (negative) and refunds (positive) - refunds reduce the total
+                // Only include high-priority flexible categories (1-5)
                 const scheduledFlexible = expandedTransactions
                     .filter(t => {
                         if (t.occurrence_month !== monthIndex) return false;
                         if (t.occurrence_year !== currentYear) return false;
-                        if (!t.category_name || !t.category_name.startsWith(settings.flexiblePrefix)) return false;
+                        if (!isHighPriorityFlexible(t.category_name, settings.flexiblePrefix)) return false;
                         const txDay = new Date(t.date_next).getDate();
                         return txDay >= todayDay;
                     })
@@ -1869,14 +2104,13 @@
             } else {
                 // Future months: sum scheduled flexible expenses
                 // Uses pre-expanded transactions to handle monthly recurring expenses
-                // Skip transactions without a category (t.category_name check)
+                // Only include high-priority flexible categories (1-5)
                 // Include both expenses (negative) and refunds (positive) - refunds reduce the total
                 flexibleExpenses = expandedTransactions
                     .filter(t => {
                         return t.occurrence_month === monthIndex &&
                                t.occurrence_year === currentYear &&
-                               t.category_name &&
-                               t.category_name.startsWith(settings.flexiblePrefix);
+                               isHighPriorityFlexible(t.category_name, settings.flexiblePrefix);
                     })
                     .reduce((sum, t) => sum + t.amount, 0) / -1000;
                 flexibleTooltip = 'Estimated from scheduled transactions';
@@ -2020,26 +2254,31 @@
             maximumFractionDigits: 2
         }).format(val);
 
+        // Determine net position class
+        let netClass = '';
+        if (netPosition > 0) netClass = 'positive';
+        else if (netPosition < 0) netClass = 'negative';
+
         container.innerHTML = `
             <div class="summary-card">
-                <div class="label">Total Income</div>
+                <div class="label"><span>+</span> Total Income</div>
                 <div class="value">${formatValue(totalIncome)}</div>
             </div>
             <div class="summary-card">
-                <div class="label">Total Fixed</div>
+                <div class="label"><span>-</span> Total Fixed</div>
                 <div class="value">${formatValue(totalFixed)}</div>
             </div>
             <div class="summary-card">
-                <div class="label">Total Flexible</div>
+                <div class="label"><span>-</span> Total Flexible</div>
                 <div class="value">${formatValue(totalFlexible)}</div>
             </div>
-            <div class="summary-card">
-                <div class="label">Net Position</div>
-                <div class="value ${netPosition < 0 ? 'negative' : 'positive'}">${formatValue(netPosition)}</div>
+            <div class="summary-card ${netClass}">
+                <div class="label"><span>=</span> Net Position</div>
+                <div class="value">${netPosition >= 0 ? '+' : ''}${formatValue(netPosition)}</div>
             </div>
             <div class="summary-card ${warningCount > 0 ? 'warning' : 'healthy'}">
                 <div class="label">Float Status</div>
-                <div class="value">${warningCount > 0 ? `⚠ ${warningCount} month${warningCount > 1 ? 's' : ''} below` : '✓ All healthy'}</div>
+                <div class="value">${warningCount > 0 ? `${warningCount} month${warningCount > 1 ? 's' : ''} below` : 'All healthy'}</div>
             </div>
         `;
 
@@ -2059,50 +2298,52 @@
             <div class="table-header">
                 <button id="exportCsvBtn" class="outline secondary">Export CSV</button>
             </div>
-            <table class="budget-table">
-                <thead>
-                    <tr>
-                        <th>Month</th>
-                        <th>Income</th>
-                        <th>Fixed Expenses</th>
-                        <th>Flexible Expenses</th>
-                        <th>Total Assigned</th>
-                        <th>Available to Budget</th>
-                        <th>Closing Balance<small>floor: ${floatFormatted}</small></th>
-                        <th>Headroom</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${rows.map(row => {
-                        let rowClass = [];
-                        if (row.isPast) rowClass.push('past-month');
-                        if (row.isCurrent) rowClass.push('current-month');
-                        if (row.isBoundaryRow) rowClass.push('boundary-row');
-                        if (row.floatWarning) rowClass.push('float-warning');
+            <div class="budget-table-wrapper">
+                <table class="budget-table">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Income</th>
+                            <th>Fixed Expenses</th>
+                            <th>Flexible Expenses</th>
+                            <th>Total Assigned</th>
+                            <th>Available to Budget</th>
+                            <th>Closing Balance<small>floor: ${floatFormatted}</small></th>
+                            <th>Headroom</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows.map(row => {
+                            let rowClass = [];
+                            if (row.isPast) rowClass.push('past-month');
+                            if (row.isCurrent) rowClass.push('current-month');
+                            if (row.isBoundaryRow) rowClass.push('boundary-row');
+                            if (row.floatWarning) rowClass.push('float-warning');
 
-                        // Determine cell content with no-data handling
-                        const fixedContent = row.fixedHasData
-                            ? formatCurrency(row.fixedExpenses)
-                            : '<span class="no-data">—</span>';
-                        const flexibleContent = row.flexibleHasData
-                            ? formatCurrency(row.flexibleExpenses)
-                            : '<span class="no-data">—</span>';
+                            // Determine cell content with no-data handling
+                            const fixedContent = row.fixedHasData
+                                ? formatCurrency(row.fixedExpenses)
+                                : '<span class="no-data">—</span>';
+                            const flexibleContent = row.flexibleHasData
+                                ? formatCurrency(row.flexibleExpenses)
+                                : '<span class="no-data">—</span>';
 
-                        return `
-                            <tr class="${rowClass.join(' ')}">
-                                <td>${row.month}</td>
-                                <td title="${row.incomeTooltip}">${formatCurrency(row.income)}</td>
-                                <td title="${row.fixedTooltip}">${fixedContent}</td>
-                                <td title="${row.flexibleTooltip}">${flexibleContent}</td>
-                                <td>${formatCurrency(row.totalAssigned)}</td>
-                                <td title="${row.availableTooltip}">${formatCurrency(row.availableToBudget)}</td>
-                                <td class="closing-balance ${row.closingBalanceLevel}">${formatCurrency(row.closingBalance)}</td>
-                                <td>${formatHeadroom(row.headroom, row.headroomLevel)}</td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
+                            return `
+                                <tr class="${rowClass.join(' ')}">
+                                    <td>${row.month}</td>
+                                    <td title="${row.incomeTooltip}">${formatCurrency(row.income)}</td>
+                                    <td title="${row.fixedTooltip}">${fixedContent}</td>
+                                    <td title="${row.flexibleTooltip}">${flexibleContent}</td>
+                                    <td>${formatCurrency(row.totalAssigned)}</td>
+                                    <td title="${row.availableTooltip}">${formatCurrency(row.availableToBudget)}</td>
+                                    <td class="closing-balance ${row.closingBalanceLevel}">${formatCurrency(row.closingBalance)}</td>
+                                    <td>${formatHeadroom(row.headroom, row.headroomLevel)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
         `;
 
         container.innerHTML = tableHtml;
@@ -2219,10 +2460,10 @@
         };
 
         // Helper to check if transaction should be included
-        // Include: flexible transactions OR income
+        // Include: high-priority flexible transactions (1-5) OR income
         const shouldInclude = (t) => {
             const category = t.category_name || '';
-            const isFlexible = category.startsWith(settings.flexiblePrefix);
+            const isFlexible = isHighPriorityFlexible(category, settings.flexiblePrefix);
             const isIncome = category === 'Inflow: Ready to Assign';
             return isFlexible || isIncome;
         };
@@ -2332,38 +2573,40 @@
         const netTotal = totalIncome + totalRefunds + totalExpenses;
 
         container.innerHTML = `
-            <table class="transactions-table">
-                <thead>
-                    <tr>
-                        <th>When</th>
-                        <th>Type</th>
-                        <th>Category</th>
-                        <th>Payee</th>
-                        <th>Amount</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${tableRows}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="4"><strong>Income</strong></td>
-                        <td class="positive"><strong>${formatCurrency(totalIncome)}</strong></td>
-                    </tr>
-                    <tr>
-                        <td colspan="4"><strong>Refunds</strong></td>
-                        <td class="positive"><strong>${formatCurrency(totalRefunds)}</strong></td>
-                    </tr>
-                    <tr>
-                        <td colspan="4"><strong>Expenses</strong></td>
-                        <td class="negative"><strong>${formatCurrency(totalExpenses)}</strong></td>
-                    </tr>
-                    <tr>
-                        <td colspan="4"><strong>Net</strong></td>
-                        <td class="${netTotal >= 0 ? 'positive' : 'negative'}"><strong>${formatCurrency(netTotal)}</strong></td>
-                    </tr>
-                </tfoot>
-            </table>
+            <div class="transactions-table-wrapper">
+                <table class="transactions-table">
+                    <thead>
+                        <tr>
+                            <th>When</th>
+                            <th>Type</th>
+                            <th>Category</th>
+                            <th>Payee</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4"><strong>Income</strong></td>
+                            <td class="positive"><strong>${formatCurrency(totalIncome)}</strong></td>
+                        </tr>
+                        <tr>
+                            <td colspan="4"><strong>Refunds</strong></td>
+                            <td class="positive"><strong>${formatCurrency(totalRefunds)}</strong></td>
+                        </tr>
+                        <tr>
+                            <td colspan="4"><strong>Expenses</strong></td>
+                            <td class="negative"><strong>${formatCurrency(totalExpenses)}</strong></td>
+                        </tr>
+                        <tr>
+                            <td colspan="4"><strong>Net</strong></td>
+                            <td class="${netTotal >= 0 ? 'positive' : 'negative'}"><strong>${formatCurrency(netTotal)}</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
         `;
     }
 
@@ -2418,14 +2661,14 @@
         // Expand scheduled transactions
         const { expanded: expandedTransactions } = expandScheduledTransactions(data.scheduledTransactions, currentYear);
 
-        // Get all flexible ACTUAL transactions for current year
+        // Get all flexible ACTUAL transactions for current year (priority 1-5 only)
         const actualTransactions = (data.transactions || []).filter(t => {
             const txDate = new Date(t.date);
             if (txDate.getFullYear() !== currentYear) return false;
             // Must have a category
             if (!t.category_name) return false;
-            // Only include flexible categories (starting with flexible prefix)
-            if (!t.category_name.startsWith(settings.flexiblePrefix)) return false;
+            // Only include high-priority flexible categories (1-5)
+            if (!isHighPriorityFlexible(t.category_name, settings.flexiblePrefix)) return false;
             // Exclude uncategorized transfers
             if (t.category_name === 'Uncategorized' && (t.payee_name || '').startsWith('Transfer')) return false;
             return true;
@@ -2447,8 +2690,8 @@
             if (t.occurrence_year !== currentYear) return false;
             // Must have a category
             if (!t.category_name) return false;
-            // Only include flexible categories (starting with flexible prefix)
-            if (!t.category_name.startsWith(settings.flexiblePrefix)) return false;
+            // Only include high-priority flexible categories (1-5)
+            if (!isHighPriorityFlexible(t.category_name, settings.flexiblePrefix)) return false;
 
             // Build the occurrence date the same way as when rendering
             // Clamp day to last valid day of month to avoid overflow
@@ -2575,8 +2818,9 @@
             <div class="projects-header">
                 <button id="toggleAllProjectsBtn" class="outline secondary" onclick="toggleAllProjects(true)">Expand All</button>
             </div>
-            <table class="projects-table">
-                <tbody>
+            <div class="projects-table-wrapper">
+                <table class="projects-table">
+                    <tbody>
         `;
 
         let groupIndex = 0;
@@ -2593,7 +2837,7 @@
             html += `
                 <tr class="group-header" data-group-id="${groupIndex}" onclick="toggleGroup(${groupIndex})">
                     <td colspan="3">
-                        <span class="collapse-icon" id="group-icon-${groupIndex}">&gt;</span>
+                        <span class="collapse-icon" id="group-icon-${groupIndex}">&#9654;</span>
                         ${escapeHtml(groupName)}
                     </td>
                     <td class="amount-col">${formatProjectAmount(-groupTotal)}</td>
@@ -2610,7 +2854,7 @@
                 html += `
                     <tr class="category-header projects-hidden" data-group="${groupIndex}" data-category-id="${catId}" onclick="toggleCategory('${catId}')">
                         <td colspan="3">
-                            <span class="collapse-icon" id="cat-icon-${catId}">&gt;</span>
+                            <span class="collapse-icon" id="cat-icon-${catId}">&#9654;</span>
                             ${escapeHtml(categoryName)}
                         </td>
                         <td class="amount-col">${formatProjectAmount(-category.total)}</td>
@@ -2643,8 +2887,9 @@
         }
 
         html += `
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
             <div class="projects-footer">
                 <button class="outline secondary" onclick="exportProjectsCSV()">Export as CSV</button>
             </div>
@@ -2709,9 +2954,13 @@
     function toggleGroup(groupId) {
         const icon = document.getElementById(`group-icon-${groupId}`);
         const categories = document.querySelectorAll(`[data-group="${groupId}"]`);
-        const isExpanding = icon.textContent === '>';
+        const isExpanding = !icon.classList.contains('expanded');
 
-        icon.textContent = isExpanding ? 'v' : '>';
+        if (isExpanding) {
+            icon.classList.add('expanded');
+        } else {
+            icon.classList.remove('expanded');
+        }
 
         categories.forEach(row => {
             if (isExpanding) {
@@ -2722,7 +2971,7 @@
                 const catId = row.dataset.categoryId;
                 if (catId) {
                     const catIcon = document.getElementById(`cat-icon-${catId}`);
-                    if (catIcon) catIcon.textContent = '>';
+                    if (catIcon) catIcon.classList.remove('expanded');
                     document.querySelectorAll(`[data-category="${catId}"]`).forEach(txRow => {
                         txRow.classList.add('projects-hidden');
                     });
@@ -2734,9 +2983,13 @@
     function toggleCategory(categoryId) {
         const icon = document.getElementById(`cat-icon-${categoryId}`);
         const transactions = document.querySelectorAll(`[data-category="${categoryId}"]`);
-        const isExpanding = icon.textContent === '>';
+        const isExpanding = !icon.classList.contains('expanded');
 
-        icon.textContent = isExpanding ? 'v' : '>';
+        if (isExpanding) {
+            icon.classList.add('expanded');
+        } else {
+            icon.classList.remove('expanded');
+        }
 
         transactions.forEach(row => {
             if (isExpanding) {
@@ -2759,16 +3012,16 @@
 
         if (expand) {
             // Expand all
-            allGroupIcons.forEach(icon => icon.textContent = 'v');
-            allCatIcons.forEach(icon => icon.textContent = 'v');
+            allGroupIcons.forEach(icon => icon.classList.add('expanded'));
+            allCatIcons.forEach(icon => icon.classList.add('expanded'));
             allCategories.forEach(row => row.classList.remove('projects-hidden'));
             allTransactions.forEach(row => row.classList.remove('projects-hidden'));
             btn.textContent = 'Collapse All';
             btn.onclick = () => toggleAllProjects(false);
         } else {
             // Collapse all
-            allGroupIcons.forEach(icon => icon.textContent = '>');
-            allCatIcons.forEach(icon => icon.textContent = '>');
+            allGroupIcons.forEach(icon => icon.classList.remove('expanded'));
+            allCatIcons.forEach(icon => icon.classList.remove('expanded'));
             allCategories.forEach(row => row.classList.add('projects-hidden'));
             allTransactions.forEach(row => row.classList.add('projects-hidden'));
             btn.textContent = 'Expand All';
