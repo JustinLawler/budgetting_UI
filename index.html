@@ -733,6 +733,7 @@
         <!-- Tab Navigation -->
         <nav class="tab-nav" id="tabNav" style="display: none;">
             <button class="active" data-tab="overview">Overview</button>
+            <button data-tab="monthly">Monthly</button>
             <button data-tab="transactions">Transactions</button>
             <button data-tab="projects">Projects</button>
         </nav>
@@ -745,14 +746,19 @@
             <!-- Warnings Panel (hidden until warnings exist) -->
             <div id="warningsPanel" class="warnings-panel" style="display: none;"></div>
 
-            <!-- Table Container -->
-            <div id="tableContainer">
+            <!-- Priority Breakdown Table -->
+            <div id="priorityBreakdownContainer">
                 <div class="missing-settings" id="missingSettingsMsg">
                     <p>Please complete your settings above to get started.</p>
                     <p>You'll need your YNAB API token and Budget ID.</p>
                     <button type="button" id="openSettingsBtn" class="outline">Open Settings</button>
                 </div>
             </div>
+        </div>
+
+        <!-- Monthly Tab -->
+        <div id="tab-monthly" class="tab-content">
+            <div id="monthlyTableContainer"></div>
         </div>
 
         <!-- Transactions Tab -->
@@ -2285,8 +2291,151 @@
         container.style.display = 'grid';
     }
 
-    function renderTable(rows, settings) {
-        const container = document.getElementById('tableContainer');
+    // Extract priority (1-5) from a flexible category name
+    // Returns null if not a valid flexible category with priority
+    function getPriorityFromCategory(categoryName, flexiblePrefix) {
+        if (!categoryName || !categoryName.startsWith(flexiblePrefix)) {
+            return null;
+        }
+        const afterPrefix = categoryName.slice(flexiblePrefix.length);
+        const priorityChar = afterPrefix.charAt(0);
+        const priority = parseInt(priorityChar, 10);
+        return (priority >= 1 && priority <= 5) ? priority : null;
+    }
+
+    // Render priority breakdown table showing annual totals by priority level
+    function renderPriorityBreakdown(data, rows, settings) {
+        const container = document.getElementById('priorityBreakdownContainer');
+        const currentYear = new Date().getFullYear();
+        const today = new Date();
+        const currentMonthIndex = today.getMonth();
+
+        // Expand scheduled transactions (same as in calculateMonthlyRows)
+        const { expanded: expandedTransactions } = expandScheduledTransactions(data.scheduledTransactions, currentYear);
+
+        // Calculate annual totals from rows
+        const totalIncome = rows.reduce((sum, r) => sum + r.income, 0);
+        const totalFixed = rows.reduce((sum, r) => sum + r.fixedExpenses, 0);
+
+        // Calculate flexible expenses grouped by priority (1-5)
+        const priorityTotals = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+        // Process each month
+        for (let monthIndex = 0; monthIndex < 12; monthIndex++) {
+            const monthKey = `${currentYear}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+            const ynabMonth = data.months.find(m => m.month === monthKey);
+            const hasMonthData = ynabMonth && ynabMonth.categories && ynabMonth.categories.length > 0;
+            const isPast = monthIndex < currentMonthIndex;
+            const isCurrent = monthIndex === currentMonthIndex;
+
+            if (isPast && hasMonthData) {
+                // Past months: use budgeted amounts grouped by priority
+                ynabMonth.categories.forEach(cat => {
+                    const priority = getPriorityFromCategory(cat.name, settings.flexiblePrefix);
+                    if (priority && !cat.hidden) {
+                        priorityTotals[priority] += (cat.budgeted || 0) / 1000;
+                    }
+                });
+            } else if (isCurrent && hasMonthData) {
+                // Current month: actual activity + scheduled transactions still to come
+                const todayDay = today.getDate();
+
+                // Actual activity from YNAB
+                ynabMonth.categories.forEach(cat => {
+                    const priority = getPriorityFromCategory(cat.name, settings.flexiblePrefix);
+                    if (priority && !cat.hidden) {
+                        priorityTotals[priority] += (cat.activity || 0) / -1000;
+                    }
+                });
+
+                // Add scheduled transactions from today onward
+                expandedTransactions
+                    .filter(t => {
+                        if (t.occurrence_month !== monthIndex) return false;
+                        if (t.occurrence_year !== currentYear) return false;
+                        const txDay = new Date(t.date_next).getDate();
+                        return txDay >= todayDay;
+                    })
+                    .forEach(t => {
+                        const priority = getPriorityFromCategory(t.category_name, settings.flexiblePrefix);
+                        if (priority) {
+                            priorityTotals[priority] += t.amount / -1000;
+                        }
+                    });
+            } else if (!isPast && !isCurrent) {
+                // Future months: sum scheduled transactions by priority
+                expandedTransactions
+                    .filter(t => t.occurrence_month === monthIndex && t.occurrence_year === currentYear)
+                    .forEach(t => {
+                        const priority = getPriorityFromCategory(t.category_name, settings.flexiblePrefix);
+                        if (priority) {
+                            priorityTotals[priority] += t.amount / -1000;
+                        }
+                    });
+            }
+        }
+
+        const formatValue = (val) => new Intl.NumberFormat('en-IE', {
+            style: 'currency',
+            currency: 'EUR',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(val);
+
+        // Calculate waterfall (running remainder)
+        let remainder = totalIncome - totalFixed;
+
+        // Build table rows
+        const tableRows = [];
+
+        // Fixed row
+        tableRows.push({
+            label: 'Fixed',
+            total: totalFixed,
+            remainder: remainder
+        });
+
+        // Priority rows (P1-P5)
+        for (let p = 1; p <= 5; p++) {
+            remainder -= priorityTotals[p];
+            tableRows.push({
+                label: `P${p}`,
+                total: priorityTotals[p],
+                remainder: remainder
+            });
+        }
+
+        const tableHtml = `
+            <div class="budget-table-wrapper" style="margin-top: 1rem;">
+                <table class="budget-table">
+                    <thead>
+                        <tr>
+                            <th style="text-align: left;">Priority</th>
+                            <th>Annual Total</th>
+                            <th>Remainder</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows.map((row, idx) => {
+                            const remainderClass = row.remainder >= 0 ? 'positive' : 'negative';
+                            return `
+                                <tr>
+                                    <td>${row.label}</td>
+                                    <td>${formatValue(row.total)}</td>
+                                    <td class="${remainderClass}">${formatValue(row.remainder)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        container.innerHTML = tableHtml;
+    }
+
+    function renderMonthlyTable(rows, settings) {
+        const container = document.getElementById('monthlyTableContainer');
         const floatFormatted = new Intl.NumberFormat('en-IE', {
             style: 'currency',
             currency: 'EUR',
@@ -3075,7 +3224,8 @@
             const rows = calculateMonthlyRows(data, settings);
             renderSummaryCards(rows, settings);
             renderWarnings(data._warnings);
-            renderTable(rows, settings);
+            renderPriorityBreakdown(data, rows, settings);
+            renderMonthlyTable(rows, settings);
 
             // Render transactions tab with current month selection
             const txMonthSelect = document.getElementById('transactionsMonth');
