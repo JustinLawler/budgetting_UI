@@ -562,6 +562,28 @@
             .summary-card .value {
                 font-size: 1.15rem;
             }
+
+            /* Hide Transactions tab on mobile - doesn't display well */
+            .tab-nav button[data-tab="transactions"] {
+                display: none;
+            }
+
+            /* Projects table: hide Memo column, keep Date, Payee, Amount */
+            .projects-table th:nth-child(3),
+            .projects-table td.memo-col {
+                display: none;
+            }
+
+            /* Adjust Projects table column widths for mobile */
+            .project-row td.date-col {
+                width: auto;
+                min-width: 5rem;
+                padding-left: 2rem;
+            }
+
+            .project-row td.payee-col {
+                width: auto;
+            }
         }
 
         /* Content fade-in animation */
