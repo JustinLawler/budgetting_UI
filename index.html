@@ -219,6 +219,32 @@
             background: rgba(34, 197, 94, 0.15);
         }
 
+        .summary-card.caution {
+            background: #fef9c3;
+            border-color: #eab308;
+        }
+
+        .summary-card.caution .value {
+            color: #ca8a04;
+        }
+
+        [data-theme="dark"] .summary-card.caution {
+            background: rgba(234, 179, 8, 0.15);
+        }
+
+        .summary-card.danger {
+            background: #ffedd5;
+            border-color: #f97316;
+        }
+
+        .summary-card.danger .value {
+            color: #ea580c;
+        }
+
+        [data-theme="dark"] .summary-card.danger {
+            background: rgba(249, 115, 22, 0.15);
+        }
+
         /* Table Header Actions */
         .table-header {
             display: flex;
@@ -340,6 +366,14 @@
             color: var(--amber-color);
         }
 
+        .caution {
+            color: #ca8a04;
+        }
+
+        [data-theme="dark"] .caution {
+            color: #eab308;
+        }
+
         .missing-settings {
             padding: 2rem;
             text-align: center;
@@ -447,6 +481,42 @@
             min-width: 1.25rem;
         }
 
+        .projects-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-toggles {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .toggle-btn {
+            padding: 0.4rem 0.8rem;
+            border-radius: 2rem;
+            border: 1px solid var(--pico-muted-border-color);
+            background: var(--pico-card-background-color);
+            color: var(--pico-muted-color);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-btn:hover {
+            border-color: var(--pico-primary);
+        }
+
+        .toggle-btn.active {
+            background: var(--pico-primary);
+            border-color: var(--pico-primary);
+            color: var(--pico-primary-inverse);
+        }
+
         .transactions-table-wrapper {
             border-radius: 8px;
             box-shadow: var(--card-shadow);
@@ -527,6 +597,28 @@
 
             .summary-card .value {
                 font-size: 1.15rem;
+            }
+
+            /* Hide Transactions tab on mobile - doesn't display well */
+            .tab-nav button[data-tab="transactions"] {
+                display: none;
+            }
+
+            /* Projects table: hide Memo column, keep Date, Payee, Amount */
+            .projects-table th:nth-child(3),
+            .projects-table td.memo-col {
+                display: none;
+            }
+
+            /* Adjust Projects table column widths for mobile */
+            .project-row td.date-col {
+                width: auto;
+                min-width: 5rem;
+                padding-left: 2rem;
+            }
+
+            .project-row td.payee-col {
+                width: auto;
             }
         }
 
@@ -784,6 +876,14 @@
 
         <!-- Projects Tab -->
         <div id="tab-projects" class="tab-content">
+            <div class="projects-toolbar">
+                <div class="filter-toggles">
+                    <button type="button" id="projectsYearFilter" class="toggle-btn active">Current year only</button>
+                    <button type="button" id="projectsPriorityFilter" class="toggle-btn active">Priority 1-5 only</button>
+                    <button type="button" id="projectsFixedFilter" class="toggle-btn">Include fixed</button>
+                </div>
+                <button id="toggleAllProjectsBtn" class="outline secondary">Expand All</button>
+            </div>
             <div id="projectsContainer"></div>
         </div>
     </main>
@@ -2260,10 +2360,32 @@
             maximumFractionDigits: 2
         }).format(val);
 
-        // Determine net position class
+        // Combine fixed + flexible into total outgoings
+        const totalOutgoings = totalFixed + totalFlexible;
+
+        // Determine net position class (green/yellow/red)
         let netClass = '';
-        if (netPosition > 0) netClass = 'positive';
-        else if (netPosition < 0) netClass = 'negative';
+        if (netPosition > 0) {
+            netClass = 'positive';  // green - net positive
+        } else if (netPosition < 0 && warningCount === 0) {
+            netClass = 'caution';   // yellow - below zero but float covers it
+        } else if (netPosition < 0 && warningCount > 0) {
+            netClass = 'negative';  // red - running into float
+        }
+
+        // Determine float status class (green/yellow/orange)
+        // Check months below float first, then check annual deficit
+        let floatClass, floatText;
+        if (warningCount > 0) {
+            floatClass = 'danger';
+            floatText = `${warningCount} month${warningCount !== 1 ? 's' : ''} below float`;
+        } else if (netPosition >= 0) {
+            floatClass = 'healthy';
+            floatText = 'All healthy';
+        } else {
+            floatClass = 'caution';
+            floatText = 'Spending savings';
+        }
 
         container.innerHTML = `
             <div class="summary-card">
@@ -2271,20 +2393,16 @@
                 <div class="value">${formatValue(totalIncome)}</div>
             </div>
             <div class="summary-card">
-                <div class="label"><span>-</span> Total Fixed</div>
-                <div class="value">${formatValue(totalFixed)}</div>
-            </div>
-            <div class="summary-card">
-                <div class="label"><span>-</span> Total Flexible</div>
-                <div class="value">${formatValue(totalFlexible)}</div>
+                <div class="label"><span>-</span> Total Outgoings</div>
+                <div class="value">${formatValue(totalOutgoings)}</div>
             </div>
             <div class="summary-card ${netClass}">
                 <div class="label"><span>=</span> Net Position</div>
                 <div class="value">${netPosition >= 0 ? '+' : ''}${formatValue(netPosition)}</div>
             </div>
-            <div class="summary-card ${warningCount > 0 ? 'warning' : 'healthy'}">
+            <div class="summary-card ${floatClass}">
                 <div class="label">Float Status</div>
-                <div class="value">${warningCount > 0 ? `${warningCount} month${warningCount > 1 ? 's' : ''} below` : 'All healthy'}</div>
+                <div class="value">${floatText}</div>
             </div>
         `;
 
@@ -2382,6 +2500,9 @@
             maximumFractionDigits: 2
         }).format(val);
 
+        // Count months below float threshold (from rows data)
+        const warningCount = rows.filter(r => r.floatWarning).length;
+
         // Calculate waterfall (running remainder)
         let remainder = totalIncome - totalFixed;
 
@@ -2417,7 +2538,15 @@
                     </thead>
                     <tbody>
                         ${tableRows.map((row, idx) => {
-                            const remainderClass = row.remainder >= 0 ? 'positive' : 'negative';
+                            // 3-state coloring: green if positive, yellow if negative but no float warnings, red if negative with float warnings
+                            let remainderClass;
+                            if (row.remainder >= 0) {
+                                remainderClass = 'positive';
+                            } else if (warningCount === 0) {
+                                remainderClass = 'caution';
+                            } else {
+                                remainderClass = 'negative';
+                            }
                             return `
                                 <tr>
                                     <td>${row.label}</td>
@@ -2776,6 +2905,28 @@
         });
     }
 
+    // Initialize projects tab
+    function initProjectsTab() {
+        const yearFilter = document.getElementById('projectsYearFilter');
+        const priorityFilter = document.getElementById('projectsPriorityFilter');
+        const fixedFilter = document.getElementById('projectsFixedFilter');
+        const expandAllBtn = document.getElementById('toggleAllProjectsBtn');
+
+        const onFilterClick = (btn) => {
+            btn.classList.toggle('active');
+            if (!_projectsData) return;
+            const settings = loadSettings();
+            renderProjectsTab(_projectsData, settings);
+        };
+
+        yearFilter.addEventListener('click', () => onFilterClick(yearFilter));
+        priorityFilter.addEventListener('click', () => onFilterClick(priorityFilter));
+        fixedFilter.addEventListener('click', () => onFilterClick(fixedFilter));
+
+        // Initialize expand all button (toggles between expand/collapse)
+        expandAllBtn.addEventListener('click', () => toggleAllProjects());
+    }
+
     // ============================================================
     // PROJECTS TAB
     // ============================================================
@@ -2783,6 +2934,7 @@
     // Store category group mapping for projects tab
     let _categoryGroupMap = {};
     let _projectsExportData = [];
+    let _projectsData = null;
 
     function buildCategoryGroupMap(monthsData) {
         // Build a mapping of category_name → category_group_name from the first month with data
@@ -2800,26 +2952,56 @@
     }
 
     function renderProjectsTab(data, settings) {
+        _projectsData = data; // Store for re-rendering on filter change
+
+        // Reset expand/collapse state and button text when re-rendering
+        _projectsExpanded = false;
+        const expandBtn = document.getElementById('toggleAllProjectsBtn');
+        if (expandBtn) expandBtn.textContent = 'Expand All';
+
         const container = document.getElementById('projectsContainer');
         const currentYear = new Date().getFullYear();
         const today = new Date();
 
+        // Read filter toggle button states
+        const yearFilterEnabled = document.getElementById('projectsYearFilter')?.classList.contains('active') ?? true;
+        const priorityFilterEnabled = document.getElementById('projectsPriorityFilter')?.classList.contains('active') ?? true;
+        const includeFixedEnabled = document.getElementById('projectsFixedFilter')?.classList.contains('active') ?? false;
+
         // Build category group map from months data
         _categoryGroupMap = buildCategoryGroupMap(data.months);
 
-        // Expand scheduled transactions
-        const { expanded: expandedTransactions } = expandScheduledTransactions(data.scheduledTransactions, currentYear);
+        // Expand scheduled transactions - include additional years if year filter is disabled
+        let expandedTransactions = [];
+        if (yearFilterEnabled) {
+            const result = expandScheduledTransactions(data.scheduledTransactions, currentYear);
+            expandedTransactions = result.expanded;
+        } else {
+            // Expand for current year and next 2 years to show future transactions
+            for (let year = currentYear; year <= currentYear + 2; year++) {
+                const result = expandScheduledTransactions(data.scheduledTransactions, year);
+                expandedTransactions = expandedTransactions.concat(result.expanded);
+            }
+        }
 
-        // Get all flexible ACTUAL transactions for current year (priority 1-5 only)
+        // Get ACTUAL transactions (optionally filtered by year, priority, and fixed/flexible)
         const actualTransactions = (data.transactions || []).filter(t => {
             const txDate = new Date(t.date);
-            if (txDate.getFullYear() !== currentYear) return false;
+            if (yearFilterEnabled && txDate.getFullYear() !== currentYear) return false;
             // Must have a category
             if (!t.category_name) return false;
-            // Only include high-priority flexible categories (1-5)
-            if (!isHighPriorityFlexible(t.category_name, settings.flexiblePrefix)) return false;
             // Exclude uncategorized transfers
             if (t.category_name === 'Uncategorized' && (t.payee_name || '').startsWith('Transfer')) return false;
+
+            // Check if flexible or fixed category
+            const isFlexible = t.category_name.startsWith(settings.flexiblePrefix);
+            if (isFlexible) {
+                // For flexible categories, apply priority filter if enabled
+                if (priorityFilterEnabled && !isHighPriorityFlexible(t.category_name, settings.flexiblePrefix)) return false;
+            } else {
+                // For fixed categories, only include if fixed filter is enabled
+                if (!includeFixedEnabled) return false;
+            }
             return true;
         });
 
@@ -2831,23 +3013,32 @@
             actualsExist.add(`${t.category_name}|${txMonth}`);
         }
 
-        // Get all flexible SCHEDULED transactions for current year
+        // Get SCHEDULED transactions (optionally filtered by year, priority, and fixed/flexible)
         // Use start of today for date comparisons (midnight)
         const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
         const scheduledTransactions = expandedTransactions.filter(t => {
-            if (t.occurrence_year !== currentYear) return false;
+            if (yearFilterEnabled && t.occurrence_year !== currentYear) return false;
             // Must have a category
             if (!t.category_name) return false;
-            // Only include high-priority flexible categories (1-5)
-            if (!isHighPriorityFlexible(t.category_name, settings.flexiblePrefix)) return false;
+
+            // Check if flexible or fixed category
+            const isFlexible = t.category_name.startsWith(settings.flexiblePrefix);
+            if (isFlexible) {
+                // For flexible categories, apply priority filter if enabled
+                if (priorityFilterEnabled && !isHighPriorityFlexible(t.category_name, settings.flexiblePrefix)) return false;
+            } else {
+                // For fixed categories, only include if fixed filter is enabled
+                if (!includeFixedEnabled) return false;
+            }
 
             // Build the occurrence date the same way as when rendering
             // Clamp day to last valid day of month to avoid overflow
             const txDay = new Date(t.date_next).getDate();
-            const lastDayOfMonth = new Date(currentYear, t.occurrence_month + 1, 0).getDate();
+            const txYear = t.occurrence_year || currentYear;
+            const lastDayOfMonth = new Date(txYear, t.occurrence_month + 1, 0).getDate();
             const clampedDay = Math.min(txDay, lastDayOfMonth);
-            const occurrenceDate = new Date(currentYear, t.occurrence_month, clampedDay);
+            const occurrenceDate = new Date(txYear, t.occurrence_month, clampedDay);
 
             // Exclude scheduled transactions for dates that have already passed
             if (occurrenceDate < todayStart) return false;
@@ -2881,13 +3072,14 @@
             // For scheduled, use date_next and occurrence info
             // Build a date string for the occurrence month
             // Clamp day to last valid day of month to avoid overflow (e.g., Apr 31 → May 1)
+            const txYear = t.occurrence_year || currentYear;
             const dayFromDateNext = new Date(t.date_next).getDate();
-            const lastDayOfMonth = new Date(currentYear, t.occurrence_month + 1, 0).getDate();
+            const lastDayOfMonth = new Date(txYear, t.occurrence_month + 1, 0).getDate();
             const clampedDay = Math.min(dayFromDateNext, lastDayOfMonth);
             // Format date manually to avoid timezone issues with toISOString()
             const month = String(t.occurrence_month + 1).padStart(2, '0');
             const day = String(clampedDay).padStart(2, '0');
-            const dateStr = `${currentYear}-${month}-${day}`;
+            const dateStr = `${txYear}-${month}-${day}`;
             allTransactions.push({
                 date: dateStr,
                 category_id: t.category_id || '',
@@ -2895,7 +3087,8 @@
                 payee_name: t.payee_name,
                 memo: t.memo || '',
                 amount: t.amount,
-                source: 'scheduled'
+                source: 'scheduled',
+                isFutureYear: txYear > currentYear
             });
         }
 
@@ -2939,7 +3132,8 @@
                 memo: t.memo || '',
                 amount: t.amount / 1000, // Convert milliunits
                 isPast: new Date(t.date) < today,
-                isScheduled: t.source === 'scheduled'
+                isScheduled: t.source === 'scheduled',
+                isFutureYear: t.isFutureYear || false
             });
         }
 
@@ -2964,9 +3158,6 @@
 
         // Build HTML
         let html = `
-            <div class="projects-header">
-                <button id="toggleAllProjectsBtn" class="outline secondary" onclick="toggleAllProjects(true)">Expand All</button>
-            </div>
             <div class="projects-table-wrapper">
                 <table class="projects-table">
                     <tbody>
@@ -3013,7 +3204,7 @@
                 // Transaction rows (hidden by default)
                 for (const tx of category.transactions) {
                     const pastClass = tx.isPast ? 'past' : '';
-                    const scheduledIndicator = tx.isScheduled ? ' 📅' : '';
+                    const scheduledIndicator = tx.isScheduled ? (tx.isFutureYear ? ' 🔮' : ' 📅') : '';
                     const dateStr = new Date(tx.date).toLocaleDateString('en-IE', {
                         day: 'numeric',
                         month: 'short'
@@ -3152,12 +3343,18 @@
         event.stopPropagation();
     }
 
-    function toggleAllProjects(expand) {
+    // Track expand/collapse state for the toggle button
+    let _projectsExpanded = false;
+
+    function toggleAllProjects(forceExpand) {
         const btn = document.getElementById('toggleAllProjectsBtn');
         const allGroupIcons = document.querySelectorAll('[id^="group-icon-"]');
         const allCatIcons = document.querySelectorAll('[id^="cat-icon-"]');
         const allCategories = document.querySelectorAll('.category-header');
         const allTransactions = document.querySelectorAll('.project-row');
+
+        // If forceExpand is undefined, toggle based on current state
+        const expand = (forceExpand !== undefined) ? forceExpand : !_projectsExpanded;
 
         if (expand) {
             // Expand all
@@ -3166,7 +3363,7 @@
             allCategories.forEach(row => row.classList.remove('projects-hidden'));
             allTransactions.forEach(row => row.classList.remove('projects-hidden'));
             btn.textContent = 'Collapse All';
-            btn.onclick = () => toggleAllProjects(false);
+            _projectsExpanded = true;
         } else {
             // Collapse all
             allGroupIcons.forEach(icon => icon.classList.remove('expanded'));
@@ -3174,7 +3371,7 @@
             allCategories.forEach(row => row.classList.add('projects-hidden'));
             allTransactions.forEach(row => row.classList.add('projects-hidden'));
             btn.textContent = 'Expand All';
-            btn.onclick = () => toggleAllProjects(true);
+            _projectsExpanded = false;
         }
     }
 
@@ -3271,6 +3468,9 @@
 
         // Initialize transactions tab
         initTransactionsTab();
+
+        // Initialize projects tab
+        initProjectsTab();
 
         // Event listeners
         document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
