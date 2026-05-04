@@ -219,6 +219,32 @@
             background: rgba(34, 197, 94, 0.15);
         }
 
+        .summary-card.caution {
+            background: #fef9c3;
+            border-color: #eab308;
+        }
+
+        .summary-card.caution .value {
+            color: #ca8a04;
+        }
+
+        [data-theme="dark"] .summary-card.caution {
+            background: rgba(234, 179, 8, 0.15);
+        }
+
+        .summary-card.danger {
+            background: #ffedd5;
+            border-color: #f97316;
+        }
+
+        .summary-card.danger .value {
+            color: #ea580c;
+        }
+
+        [data-theme="dark"] .summary-card.danger {
+            background: rgba(249, 115, 22, 0.15);
+        }
+
         /* Table Header Actions */
         .table-header {
             display: flex;
@@ -338,6 +364,14 @@
 
         .amber {
             color: var(--amber-color);
+        }
+
+        .caution {
+            color: #ca8a04;
+        }
+
+        [data-theme="dark"] .caution {
+            color: #eab308;
         }
 
         .missing-settings {
@@ -2260,10 +2294,32 @@
             maximumFractionDigits: 2
         }).format(val);
 
-        // Determine net position class
+        // Combine fixed + flexible into total outgoings
+        const totalOutgoings = totalFixed + totalFlexible;
+
+        // Determine net position class (green/yellow/red)
         let netClass = '';
-        if (netPosition > 0) netClass = 'positive';
-        else if (netPosition < 0) netClass = 'negative';
+        if (netPosition > 0) {
+            netClass = 'positive';  // green - net positive
+        } else if (netPosition < 0 && warningCount === 0) {
+            netClass = 'caution';   // yellow - below zero but float covers it
+        } else if (netPosition < 0 && warningCount > 0) {
+            netClass = 'negative';  // red - running into float
+        }
+
+        // Determine float status class (green/yellow/orange)
+        // Check months below float first, then check annual deficit
+        let floatClass, floatText;
+        if (warningCount > 0) {
+            floatClass = 'danger';
+            floatText = `${warningCount} month${warningCount !== 1 ? 's' : ''} below float`;
+        } else if (netPosition >= 0) {
+            floatClass = 'healthy';
+            floatText = 'All healthy';
+        } else {
+            floatClass = 'caution';
+            floatText = 'Spending savings';
+        }
 
         container.innerHTML = `
             <div class="summary-card">
@@ -2271,20 +2327,16 @@
                 <div class="value">${formatValue(totalIncome)}</div>
             </div>
             <div class="summary-card">
-                <div class="label"><span>-</span> Total Fixed</div>
-                <div class="value">${formatValue(totalFixed)}</div>
-            </div>
-            <div class="summary-card">
-                <div class="label"><span>-</span> Total Flexible</div>
-                <div class="value">${formatValue(totalFlexible)}</div>
+                <div class="label"><span>-</span> Total Outgoings</div>
+                <div class="value">${formatValue(totalOutgoings)}</div>
             </div>
             <div class="summary-card ${netClass}">
                 <div class="label"><span>=</span> Net Position</div>
                 <div class="value">${netPosition >= 0 ? '+' : ''}${formatValue(netPosition)}</div>
             </div>
-            <div class="summary-card ${warningCount > 0 ? 'warning' : 'healthy'}">
+            <div class="summary-card ${floatClass}">
                 <div class="label">Float Status</div>
-                <div class="value">${warningCount > 0 ? `${warningCount} month${warningCount > 1 ? 's' : ''} below` : 'All healthy'}</div>
+                <div class="value">${floatText}</div>
             </div>
         `;
 
@@ -2382,6 +2434,9 @@
             maximumFractionDigits: 2
         }).format(val);
 
+        // Count months below float threshold (from rows data)
+        const warningCount = rows.filter(r => r.floatWarning).length;
+
         // Calculate waterfall (running remainder)
         let remainder = totalIncome - totalFixed;
 
@@ -2417,7 +2472,15 @@
                     </thead>
                     <tbody>
                         ${tableRows.map((row, idx) => {
-                            const remainderClass = row.remainder >= 0 ? 'positive' : 'negative';
+                            // 3-state coloring: green if positive, yellow if negative but no float warnings, red if negative with float warnings
+                            let remainderClass;
+                            if (row.remainder >= 0) {
+                                remainderClass = 'positive';
+                            } else if (warningCount === 0) {
+                                remainderClass = 'caution';
+                            } else {
+                                remainderClass = 'negative';
+                            }
                             return `
                                 <tr>
                                     <td>${row.label}</td>
