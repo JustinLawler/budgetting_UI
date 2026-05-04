@@ -481,6 +481,42 @@
             min-width: 1.25rem;
         }
 
+        .projects-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-toggles {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .toggle-btn {
+            padding: 0.4rem 0.8rem;
+            border-radius: 2rem;
+            border: 1px solid var(--pico-muted-border-color);
+            background: var(--pico-card-background-color);
+            color: var(--pico-muted-color);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-btn:hover {
+            border-color: var(--pico-primary);
+        }
+
+        .toggle-btn.active {
+            background: var(--pico-primary);
+            border-color: var(--pico-primary);
+            color: var(--pico-primary-inverse);
+        }
+
         .transactions-table-wrapper {
             border-radius: 8px;
             box-shadow: var(--card-shadow);
@@ -840,19 +876,13 @@
 
         <!-- Projects Tab -->
         <div id="tab-projects" class="tab-content">
-            <div class="filter-row">
-                <label>
-                    <input type="checkbox" id="projectsYearFilter" checked>
-                    Current year only
-                </label>
-                <label>
-                    <input type="checkbox" id="projectsPriorityFilter" checked>
-                    Priority 1-5 only
-                </label>
-                <label>
-                    <input type="checkbox" id="projectsFixedFilter">
-                    Include fixed expenses
-                </label>
+            <div class="projects-toolbar">
+                <div class="filter-toggles">
+                    <button type="button" id="projectsYearFilter" class="toggle-btn active">Current year only</button>
+                    <button type="button" id="projectsPriorityFilter" class="toggle-btn active">Priority 1-5 only</button>
+                    <button type="button" id="projectsFixedFilter" class="toggle-btn">Include fixed</button>
+                </div>
+                <button id="toggleAllProjectsBtn" class="outline secondary">Expand All</button>
             </div>
             <div id="projectsContainer"></div>
         </div>
@@ -2880,16 +2910,21 @@
         const yearFilter = document.getElementById('projectsYearFilter');
         const priorityFilter = document.getElementById('projectsPriorityFilter');
         const fixedFilter = document.getElementById('projectsFixedFilter');
+        const expandAllBtn = document.getElementById('toggleAllProjectsBtn');
 
-        const onChange = () => {
-            if (!_projectsData) return; // No data loaded yet
+        const onFilterClick = (btn) => {
+            btn.classList.toggle('active');
+            if (!_projectsData) return;
             const settings = loadSettings();
             renderProjectsTab(_projectsData, settings);
         };
 
-        yearFilter.addEventListener('change', onChange);
-        priorityFilter.addEventListener('change', onChange);
-        fixedFilter.addEventListener('change', onChange);
+        yearFilter.addEventListener('click', () => onFilterClick(yearFilter));
+        priorityFilter.addEventListener('click', () => onFilterClick(priorityFilter));
+        fixedFilter.addEventListener('click', () => onFilterClick(fixedFilter));
+
+        // Initialize expand all button (toggles between expand/collapse)
+        expandAllBtn.addEventListener('click', () => toggleAllProjects());
     }
 
     // ============================================================
@@ -2919,14 +2954,19 @@
     function renderProjectsTab(data, settings) {
         _projectsData = data; // Store for re-rendering on filter change
 
+        // Reset expand/collapse state and button text when re-rendering
+        _projectsExpanded = false;
+        const expandBtn = document.getElementById('toggleAllProjectsBtn');
+        if (expandBtn) expandBtn.textContent = 'Expand All';
+
         const container = document.getElementById('projectsContainer');
         const currentYear = new Date().getFullYear();
         const today = new Date();
 
-        // Read filter checkbox states
-        const yearFilterEnabled = document.getElementById('projectsYearFilter')?.checked ?? true;
-        const priorityFilterEnabled = document.getElementById('projectsPriorityFilter')?.checked ?? true;
-        const includeFixedEnabled = document.getElementById('projectsFixedFilter')?.checked ?? false;
+        // Read filter toggle button states
+        const yearFilterEnabled = document.getElementById('projectsYearFilter')?.classList.contains('active') ?? true;
+        const priorityFilterEnabled = document.getElementById('projectsPriorityFilter')?.classList.contains('active') ?? true;
+        const includeFixedEnabled = document.getElementById('projectsFixedFilter')?.classList.contains('active') ?? false;
 
         // Build category group map from months data
         _categoryGroupMap = buildCategoryGroupMap(data.months);
@@ -3118,9 +3158,6 @@
 
         // Build HTML
         let html = `
-            <div class="projects-header">
-                <button id="toggleAllProjectsBtn" class="outline secondary" onclick="toggleAllProjects(true)">Expand All</button>
-            </div>
             <div class="projects-table-wrapper">
                 <table class="projects-table">
                     <tbody>
@@ -3306,12 +3343,18 @@
         event.stopPropagation();
     }
 
-    function toggleAllProjects(expand) {
+    // Track expand/collapse state for the toggle button
+    let _projectsExpanded = false;
+
+    function toggleAllProjects(forceExpand) {
         const btn = document.getElementById('toggleAllProjectsBtn');
         const allGroupIcons = document.querySelectorAll('[id^="group-icon-"]');
         const allCatIcons = document.querySelectorAll('[id^="cat-icon-"]');
         const allCategories = document.querySelectorAll('.category-header');
         const allTransactions = document.querySelectorAll('.project-row');
+
+        // If forceExpand is undefined, toggle based on current state
+        const expand = (forceExpand !== undefined) ? forceExpand : !_projectsExpanded;
 
         if (expand) {
             // Expand all
@@ -3320,7 +3363,7 @@
             allCategories.forEach(row => row.classList.remove('projects-hidden'));
             allTransactions.forEach(row => row.classList.remove('projects-hidden'));
             btn.textContent = 'Collapse All';
-            btn.onclick = () => toggleAllProjects(false);
+            _projectsExpanded = true;
         } else {
             // Collapse all
             allGroupIcons.forEach(icon => icon.classList.remove('expanded'));
@@ -3328,7 +3371,7 @@
             allCategories.forEach(row => row.classList.add('projects-hidden'));
             allTransactions.forEach(row => row.classList.add('projects-hidden'));
             btn.textContent = 'Expand All';
-            btn.onclick = () => toggleAllProjects(true);
+            _projectsExpanded = false;
         }
     }
 
