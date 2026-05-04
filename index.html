@@ -711,7 +711,11 @@
                 </label>
                 <label>
                     December Closing Balance (€)
-                    <input type="number" id="decemberBalance" placeholder="Carry-in to January">
+                    <small id="decemberBalanceHint">Auto-calculated from YNAB accounts</small>
+                    <div class="token-row">
+                        <input type="number" id="decemberBalance" placeholder="Carry-in to January" readonly>
+                        <button type="button" id="overrideBalanceBtn" class="outline">Override</button>
+                    </div>
                 </label>
                 <label>
                     Flexible Expense Emoji Prefix
@@ -799,6 +803,7 @@
             budgetId: localStorage.getItem('ynab_budgetId') || '',
             floatThreshold: parseFloat(localStorage.getItem('ynab_floatThreshold')) || 6500,
             decemberBalance: parseFloat(localStorage.getItem('ynab_decemberBalance')) || 0,
+            manualDecemberBalance: localStorage.getItem('ynab_manualDecemberBalance') ? parseFloat(localStorage.getItem('ynab_manualDecemberBalance')) : null,
             flexiblePrefix: localStorage.getItem('ynab_flexiblePrefix') || '🎯'
         };
     }
@@ -807,8 +812,16 @@
         localStorage.setItem('ynab_apiToken', document.getElementById('apiToken').value.trim());
         localStorage.setItem('ynab_budgetId', document.getElementById('budgetId').value.trim());
         localStorage.setItem('ynab_floatThreshold', document.getElementById('floatThreshold').value);
-        localStorage.setItem('ynab_decemberBalance', document.getElementById('decemberBalance').value);
         localStorage.setItem('ynab_flexiblePrefix', document.getElementById('flexiblePrefix').value);
+
+        // Only save manual December balance if the field is not readonly (user has overridden)
+        const decemberBalanceInput = document.getElementById('decemberBalance');
+        if (!decemberBalanceInput.readOnly) {
+            const value = decemberBalanceInput.value;
+            if (value && value.trim() !== '') {
+                localStorage.setItem('ynab_manualDecemberBalance', value);
+            }
+        }
 
         updateStatus('Settings saved!', 'success');
         checkSettingsComplete();
@@ -822,8 +835,24 @@
         document.getElementById('apiToken').value = settings.apiToken;
         document.getElementById('budgetId').value = settings.budgetId;
         document.getElementById('floatThreshold').value = settings.floatThreshold;
-        document.getElementById('decemberBalance').value = settings.decemberBalance;
         document.getElementById('flexiblePrefix').value = settings.flexiblePrefix;
+
+        // Set up December balance field based on whether manual override is set
+        const decemberBalanceInput = document.getElementById('decemberBalance');
+        const overrideBtn = document.getElementById('overrideBalanceBtn');
+        const hint = document.getElementById('decemberBalanceHint');
+
+        if (settings.manualDecemberBalance !== null) {
+            decemberBalanceInput.value = settings.manualDecemberBalance;
+            decemberBalanceInput.readOnly = false;
+            overrideBtn.textContent = 'Auto';
+            hint.textContent = 'Manual override active';
+        } else {
+            decemberBalanceInput.value = settings.decemberBalance || '';
+            decemberBalanceInput.readOnly = true;
+            overrideBtn.textContent = 'Override';
+            hint.textContent = 'Auto-calculated from YNAB accounts';
+        }
 
         // Collapse settings panel if settings are already saved
         if (settings.apiToken && settings.budgetId) {
@@ -874,6 +903,63 @@
         throw new YnabApiError(detail, 'unknown');
     }
 
+    // Calculate December 31st closing balance from current account balances and YTD transactions
+    // Logic: Current balance = Dec 31 balance + YTD net activity
+    // Therefore: Dec 31 balance = Current balance - YTD net activity
+    function calculateDecemberBalance(accounts, transactions) {
+        // Get on-budget account IDs and balances
+        const onBudgetAccounts = accounts.filter(acc => acc.on_budget && !acc.closed && !acc.deleted);
+        const onBudgetAccountIds = new Set(onBudgetAccounts.map(acc => acc.id));
+        const currentBalance = onBudgetAccounts.reduce((sum, acc) => sum + acc.balance, 0) / 1000;
+
+        // Filter transactions to only on-budget accounts, excluding setup transactions
+        const activityTransactions = transactions.filter(t => {
+            // Only include transactions from on-budget accounts
+            if (!onBudgetAccountIds.has(t.account_id)) return false;
+
+            // Exclude Starting Balance and Reconciliation transactions
+            const payee = (t.payee_name || '').toLowerCase();
+            return !payee.includes('starting balance') &&
+                   !payee.includes('reconciliation') &&
+                   !payee.includes('manual balance');
+        });
+
+        // Break down transactions by type
+        const inflows = activityTransactions.filter(t => t.amount > 0);
+        const outflows = activityTransactions.filter(t => t.amount < 0);
+
+        const totalInflows = inflows.reduce((sum, t) => sum + t.amount, 0) / 1000;
+        const totalOutflows = outflows.reduce((sum, t) => sum + t.amount, 0) / 1000;
+        const ytdNetActivity = totalInflows + totalOutflows;
+
+        // December balance = current balance - YTD net activity
+        const decemberBalance = currentBalance - ytdNetActivity;
+
+        // Debug logging
+        console.log('=== December Balance Calculation ===');
+        console.log('On-budget accounts:', onBudgetAccounts.map(a => ({ name: a.name, balance: a.balance / 1000 })));
+        console.log('Current total balance:', currentBalance.toFixed(2));
+        console.log('---');
+        console.log(`Transactions: ${transactions.length} total, ${activityTransactions.length} after filtering`);
+        console.log('Total inflows (income/transfers in):', totalInflows.toFixed(2), `(${inflows.length} transactions)`);
+        console.log('Total outflows (expenses/transfers out):', totalOutflows.toFixed(2), `(${outflows.length} transactions)`);
+        console.log('YTD net activity:', ytdNetActivity.toFixed(2));
+        console.log('---');
+        console.log('Calculated Dec 31 balance:', decemberBalance.toFixed(2));
+
+        // Show top 5 largest inflows for debugging
+        const topInflows = [...inflows].sort((a, b) => b.amount - a.amount).slice(0, 5);
+        console.log('Top 5 inflows:', topInflows.map(t => ({
+            payee: t.payee_name,
+            amount: (t.amount / 1000).toFixed(2),
+            category: t.category_name,
+            date: t.date
+        })));
+        console.log('====================================');
+
+        return decemberBalance;
+    }
+
     // Test the API connection by fetching budgets list
     async function testConnection() {
         const apiToken = document.getElementById('apiToken').value.trim();
@@ -919,14 +1005,15 @@
 
         const currentYear = new Date().getFullYear();
 
-        // First, fetch transactions and scheduled transactions in parallel
-        const [transactionsResponse, scheduledResponse] = await Promise.all([
+        // First, fetch transactions, scheduled transactions, and accounts in parallel
+        const [transactionsResponse, scheduledResponse, accountsResponse] = await Promise.all([
             fetch(`${YNAB_BASE_URL}/budgets/${settings.budgetId}/transactions?since_date=${currentYear}-01-01`, { headers }),
-            fetch(`${YNAB_BASE_URL}/budgets/${settings.budgetId}/scheduled_transactions`, { headers })
+            fetch(`${YNAB_BASE_URL}/budgets/${settings.budgetId}/scheduled_transactions`, { headers }),
+            fetch(`${YNAB_BASE_URL}/budgets/${settings.budgetId}/accounts`, { headers })
         ]);
 
         // Check for errors
-        for (const [name, response] of [['transactions', transactionsResponse], ['scheduled', scheduledResponse]]) {
+        for (const [name, response] of [['transactions', transactionsResponse], ['scheduled', scheduledResponse], ['accounts', accountsResponse]]) {
             if (!response.ok) {
                 const errorData = await response.json();
                 handleApiError(response, errorData);
@@ -935,6 +1022,7 @@
 
         const transactionsData = await transactionsResponse.json();
         const scheduledData = await scheduledResponse.json();
+        const accountsData = await accountsResponse.json();
 
         // Fetch each month individually to get category details
         // The /months endpoint only returns summary data without categories
@@ -1016,7 +1104,8 @@
         return {
             months: currentYearMonths,
             transactions: flattenedTransactions,
-            scheduledTransactions: flattenedScheduled
+            scheduledTransactions: flattenedScheduled,
+            accounts: accountsData.data.accounts
         };
     }
 
@@ -3221,7 +3310,27 @@
             const data = await fetchYnabData(settings);
             _debugData = data; // Store for debugging
             _transactionsData = data; // Store for transactions tab
-            const rows = calculateMonthlyRows(data, settings);
+
+            // Auto-calculate December balance from accounts + transactions
+            const calculatedDecBalance = calculateDecemberBalance(data.accounts, data.transactions);
+
+            // Update the UI field to show calculated value
+            const decemberBalanceInput = document.getElementById('decemberBalance');
+            if (decemberBalanceInput.readOnly) {
+                // Only update if not in manual override mode
+                decemberBalanceInput.value = calculatedDecBalance.toFixed(2);
+            }
+
+            // Store the calculated value for future use
+            localStorage.setItem('ynab_decemberBalance', calculatedDecBalance.toFixed(2));
+
+            // Use manual override if set, otherwise use calculated value
+            const effectiveSettings = {
+                ...settings,
+                decemberBalance: settings.manualDecemberBalance !== null ? settings.manualDecemberBalance : calculatedDecBalance
+            };
+
+            const rows = calculateMonthlyRows(data, effectiveSettings);
             renderSummaryCards(rows, settings);
             renderWarnings(data._warnings);
             renderPriorityBreakdown(data, rows, settings);
@@ -3278,6 +3387,33 @@
         document.getElementById('testConnectionBtn').addEventListener('click', testConnection);
         document.getElementById('openSettingsBtn').addEventListener('click', () => {
             document.getElementById('settingsPanel').setAttribute('open', '');
+        });
+
+        // December balance override toggle
+        document.getElementById('overrideBalanceBtn').addEventListener('click', () => {
+            const decemberBalanceInput = document.getElementById('decemberBalance');
+            const overrideBtn = document.getElementById('overrideBalanceBtn');
+            const hint = document.getElementById('decemberBalanceHint');
+
+            if (decemberBalanceInput.readOnly) {
+                // Switch to manual override mode
+                decemberBalanceInput.readOnly = false;
+                decemberBalanceInput.focus();
+                overrideBtn.textContent = 'Auto';
+                hint.textContent = 'Manual override active';
+            } else {
+                // Switch back to auto mode - clear manual override
+                decemberBalanceInput.readOnly = true;
+                localStorage.removeItem('ynab_manualDecemberBalance');
+                overrideBtn.textContent = 'Override';
+                hint.textContent = 'Auto-calculated from YNAB accounts';
+
+                // Restore the auto-calculated value from localStorage
+                const calculatedValue = localStorage.getItem('ynab_decemberBalance');
+                if (calculatedValue) {
+                    decemberBalanceInput.value = calculatedValue;
+                }
+            }
         });
     });
     </script>
