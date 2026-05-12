@@ -245,6 +245,114 @@
             background: rgba(249, 115, 22, 0.15);
         }
 
+        /* Headroom Chart */
+        .headroom-chart-container {
+            max-width: 800px;
+            margin: 0 auto 1.5rem;
+            padding: 1rem 1.25rem;
+            background: var(--pico-card-background-color);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--pico-muted-border-color);
+        }
+
+        .headroom-chart-container h4 {
+            margin: 0 0 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--pico-muted-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .headroom-chart-svg {
+            width: 100%;
+            height: auto;
+        }
+
+        .headroom-chart-line {
+            fill: none;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .headroom-chart-line.above {
+            stroke: var(--positive-color);
+        }
+
+        .headroom-chart-line.below {
+            stroke: var(--amber-color);
+        }
+
+        .headroom-chart-point {
+            stroke-width: 2;
+        }
+
+        .headroom-chart-point.above {
+            fill: var(--positive-color);
+            stroke: var(--positive-color);
+        }
+
+        .headroom-chart-point.below {
+            fill: var(--amber-color);
+            stroke: var(--amber-color);
+        }
+
+        .headroom-chart-point.current {
+            stroke-width: 3;
+            stroke: var(--pico-primary);
+        }
+
+        .headroom-chart-threshold {
+            stroke: var(--pico-muted-color);
+            stroke-width: 1.5;
+            stroke-dasharray: 6, 4;
+        }
+
+        .headroom-chart-grid {
+            stroke: var(--pico-muted-border-color);
+            stroke-width: 1;
+        }
+
+        .headroom-chart-axis-label {
+            font-size: 11px;
+            fill: var(--pico-muted-color);
+            font-family: inherit;
+        }
+
+        .headroom-chart-month-label {
+            font-size: 11px;
+            fill: var(--pico-color);
+            font-family: inherit;
+            text-anchor: middle;
+        }
+
+        .headroom-chart-threshold-label {
+            font-size: 10px;
+            fill: var(--pico-muted-color);
+            font-family: inherit;
+        }
+
+        .headroom-chart-zero-line {
+            stroke: var(--pico-muted-border-color);
+            stroke-width: 1;
+        }
+
+        .headroom-chart-start-balance {
+            stroke: var(--pico-primary);
+            stroke-width: 1.5;
+            stroke-dasharray: 4, 3;
+            opacity: 0.7;
+        }
+
+        .headroom-chart-start-balance-label {
+            font-size: 10px;
+            fill: var(--pico-primary);
+            font-family: inherit;
+            opacity: 0.9;
+        }
+
         /* Table Header Actions */
         .table-header {
             display: flex;
@@ -599,8 +707,9 @@
                 font-size: 1.15rem;
             }
 
-            /* Hide Transactions tab on mobile - doesn't display well */
-            .tab-nav button[data-tab="transactions"] {
+            /* Hide Transactions and Priorities tabs on mobile - don't display well */
+            .tab-nav button[data-tab="transactions"],
+            .tab-nav button[data-tab="priorities"] {
                 display: none;
             }
 
@@ -828,6 +937,7 @@
             <button data-tab="monthly">Monthly</button>
             <button data-tab="transactions">Transactions</button>
             <button data-tab="projects">Projects</button>
+            <button data-tab="priorities">Priorities</button>
         </nav>
 
         <!-- Overview Tab -->
@@ -835,17 +945,22 @@
             <!-- Summary Cards (hidden until data loads) -->
             <div id="summaryCards" class="summary-cards" style="display: none;"></div>
 
+            <!-- Headroom Chart (hidden until data loads) -->
+            <div id="headroomChartContainer" class="headroom-chart-container" style="display: none;"></div>
+
             <!-- Warnings Panel (hidden until warnings exist) -->
             <div id="warningsPanel" class="warnings-panel" style="display: none;"></div>
 
-            <!-- Priority Breakdown Table -->
-            <div id="priorityBreakdownContainer">
-                <div class="missing-settings" id="missingSettingsMsg">
-                    <p>Please complete your settings above to get started.</p>
-                    <p>You'll need your YNAB API token and Budget ID.</p>
-                    <button type="button" id="openSettingsBtn" class="outline">Open Settings</button>
-                </div>
+            <div class="missing-settings" id="missingSettingsMsg">
+                <p>Please complete your settings above to get started.</p>
+                <p>You'll need your YNAB API token and Budget ID.</p>
+                <button type="button" id="openSettingsBtn" class="outline">Open Settings</button>
             </div>
+        </div>
+
+        <!-- Priorities Tab -->
+        <div id="tab-priorities" class="tab-content">
+            <div id="priorityBreakdownContainer"></div>
         </div>
 
         <!-- Monthly Tab -->
@@ -2409,6 +2524,147 @@
         container.style.display = 'grid';
     }
 
+    // Render headroom chart on Overview tab
+    function renderHeadroomChart(rows, settings) {
+        const container = document.getElementById('headroomChartContainer');
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        // Chart dimensions
+        const width = 750;
+        const height = 220;
+        const padding = { top: 20, right: 40, bottom: 35, left: 60 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+
+        // Extract headroom values
+        const headroomValues = rows.map(r => r.headroom);
+
+        // Calculate threshold line value (decemberBalance - floatThreshold represents the "zero" headroom line)
+        // headroom is calculated as closingBalance - floatThreshold
+        // So we want to show a line at headroom = 0 (which is when closingBalance = floatThreshold)
+        const thresholdValue = 0;
+
+        // Start of year balance in headroom terms (decemberBalance is the carry-in to January)
+        const startOfYearHeadroom = settings.decemberBalance - settings.floatThreshold;
+
+        // Calculate Y-axis range
+        const minValue = Math.min(...headroomValues, thresholdValue, startOfYearHeadroom);
+        const maxValue = Math.max(...headroomValues, thresholdValue, startOfYearHeadroom);
+        const range = maxValue - minValue;
+        const yPadding = range * 0.15 || 1000; // Add 15% padding, fallback for flat lines
+        const yMin = minValue - yPadding;
+        const yMax = maxValue + yPadding;
+
+        // Scale functions
+        const xScale = (i) => padding.left + (i / 11) * chartWidth;
+        const yScale = (val) => padding.top + chartHeight - ((val - yMin) / (yMax - yMin)) * chartHeight;
+
+        // Generate Y-axis labels (5 labels)
+        const yLabels = [];
+        const yStep = (yMax - yMin) / 4;
+        for (let i = 0; i <= 4; i++) {
+            const val = yMin + i * yStep;
+            yLabels.push({
+                value: val,
+                y: yScale(val),
+                label: formatCompactCurrency(val)
+            });
+        }
+
+        // Format currency compactly (e.g., €5k, €-2k)
+        function formatCompactCurrency(val) {
+            const absVal = Math.abs(val);
+            if (absVal >= 1000) {
+                return `€${(val / 1000).toFixed(0)}k`;
+            }
+            return `€${val.toFixed(0)}`;
+        }
+
+        // Find current month index
+        const currentMonthIndex = new Date().getMonth();
+
+        // Generate line segments with color based on threshold
+        let pathSegments = '';
+        for (let i = 0; i < 11; i++) {
+            const x1 = xScale(i);
+            const y1 = yScale(headroomValues[i]);
+            const x2 = xScale(i + 1);
+            const y2 = yScale(headroomValues[i + 1]);
+
+            // Color based on whether both points are above or below threshold
+            // If segment crosses threshold, use amber (below) for safety
+            const bothAbove = headroomValues[i] >= thresholdValue && headroomValues[i + 1] >= thresholdValue;
+            const colorClass = bothAbove ? 'above' : 'below';
+
+            pathSegments += `<line class="headroom-chart-line ${colorClass}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" />`;
+        }
+
+        // Generate data points with tooltips
+        let points = '';
+        const currentYear = new Date().getFullYear();
+        const fullMonthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
+        for (let i = 0; i < 12; i++) {
+            const x = xScale(i);
+            const y = yScale(headroomValues[i]);
+            const colorClass = headroomValues[i] >= thresholdValue ? 'above' : 'below';
+            const currentClass = i === currentMonthIndex ? 'current' : '';
+            const radius = i === currentMonthIndex ? 5 : 4;
+            const row = rows[i];
+            const totalExpenses = row.fixedExpenses + row.flexibleExpenses;
+            const tooltipText = `${fullMonthNames[i]} ${currentYear}\nHeadroom: €${row.headroom.toLocaleString()}\nClosing Balance: €${row.closingBalance.toLocaleString()}\nIncome: €${row.income.toLocaleString()}\nExpenses: €${totalExpenses.toLocaleString()}`;
+            points += `<circle class="headroom-chart-point ${colorClass} ${currentClass}" cx="${x}" cy="${y}" r="${radius}"><title>${tooltipText}</title></circle>`;
+        }
+
+        // Generate grid lines
+        let gridLines = '';
+        for (const label of yLabels) {
+            gridLines += `<line class="headroom-chart-grid" x1="${padding.left}" y1="${label.y}" x2="${width - padding.right}" y2="${label.y}" />`;
+        }
+
+        // Generate Y-axis labels
+        let yAxisLabels = '';
+        for (const label of yLabels) {
+            yAxisLabels += `<text class="headroom-chart-axis-label" x="${padding.left - 8}" y="${label.y + 4}" text-anchor="end">${label.label}</text>`;
+        }
+
+        // Generate X-axis month labels
+        let xAxisLabels = '';
+        for (let i = 0; i < 12; i++) {
+            const x = xScale(i);
+            xAxisLabels += `<text class="headroom-chart-month-label" x="${x}" y="${height - 10}">${monthNames[i]}</text>`;
+        }
+
+        // Threshold line (at headroom = 0)
+        const thresholdY = yScale(thresholdValue);
+        const thresholdLine = `<line class="headroom-chart-threshold" x1="${padding.left}" y1="${thresholdY}" x2="${width - padding.right}" y2="${thresholdY}" />`;
+        const thresholdLabel = `<text class="headroom-chart-threshold-label" x="${width - padding.right + 5}" y="${thresholdY + 4}">Float</text>`;
+
+        // Start of year balance line
+        const startBalanceY = yScale(startOfYearHeadroom);
+        const startBalanceLine = `<line class="headroom-chart-start-balance" x1="${padding.left}" y1="${startBalanceY}" x2="${width - padding.right}" y2="${startBalanceY}" />`;
+        const startBalanceLabel = `<text class="headroom-chart-start-balance-label" x="${width - padding.right + 5}" y="${startBalanceY + 4}">Start</text>`;
+
+        // Build SVG
+        const svg = `
+            <h4>Monthly Headroom</h4>
+            <svg class="headroom-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                ${gridLines}
+                ${thresholdLine}
+                ${startBalanceLine}
+                ${pathSegments}
+                ${points}
+                ${yAxisLabels}
+                ${xAxisLabels}
+                ${thresholdLabel}
+                ${startBalanceLabel}
+            </svg>
+        `;
+
+        container.innerHTML = svg;
+        container.style.display = 'block';
+    }
+
     // Extract priority (1-5) from a flexible category name
     // Returns null if not a valid flexible category with priority
     function getPriorityFromCategory(categoryName, flexiblePrefix) {
@@ -3420,6 +3676,7 @@
             _transactionsData = data; // Store for transactions tab
             const rows = calculateMonthlyRows(data, settings);
             renderSummaryCards(rows, settings);
+            renderHeadroomChart(rows, settings);
             renderWarnings(data._warnings);
             renderPriorityBreakdown(data, rows, settings);
             renderMonthlyTable(rows, settings);
