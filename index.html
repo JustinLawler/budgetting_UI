@@ -2369,14 +2369,13 @@
             const headroom = closingBalance - settings.floatThreshold;
 
             // Determine headroom warning level:
-            // - negative: danger (red)
-            // - 0 to 20% above threshold: warning (amber)
-            // - above 20%: healthy (green)
-            const headroomThreshold = settings.floatThreshold * 0.2;
+            // - negative: danger (red) - below float threshold
+            // - amber: warning (orange) - above float but below start-of-year balance
+            // - positive: healthy (green) - at or above start-of-year balance
             let headroomLevel = 'positive';
             if (headroom < 0) {
                 headroomLevel = 'negative';
-            } else if (headroom <= headroomThreshold) {
+            } else if (closingBalance < settings.decemberBalance) {
                 headroomLevel = 'amber';
             }
 
