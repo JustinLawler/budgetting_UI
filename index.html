@@ -693,7 +693,17 @@
             .budget-table td:nth-child(6) {
                 display: none;
             }
+        }
 
+        /* Mobile landscape: also show Total Assigned column */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .budget-table th:nth-child(5),
+            .budget-table td:nth-child(5) {
+                display: table-cell;
+            }
+        }
+
+        @media (max-width: 768px) {
             .summary-cards {
                 grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
                 gap: 0.75rem;
