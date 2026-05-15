@@ -185,6 +185,22 @@
             font-variant-numeric: tabular-nums;
         }
 
+        .summary-card .value .value-label {
+            font-size: 0.7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            opacity: 0.6;
+            margin-right: 0.4rem;
+        }
+
+        .summary-card .value.positive {
+            color: var(--positive-color);
+        }
+
+        .summary-card .value.negative {
+            color: var(--negative-color);
+        }
+
         .summary-card.positive .value {
             color: var(--positive-color);
         }
@@ -686,19 +702,15 @@
             .budget-table th:nth-child(3),
             .budget-table td:nth-child(3),
             .budget-table th:nth-child(4),
-            .budget-table td:nth-child(4),
-            .budget-table th:nth-child(5),
-            .budget-table td:nth-child(5),
-            .budget-table th:nth-child(6),
-            .budget-table td:nth-child(6) {
+            .budget-table td:nth-child(4) {
                 display: none;
             }
         }
 
-        /* Mobile landscape: also show Total Assigned column */
+        /* Mobile landscape: also show Expenses column */
         @media (max-width: 768px) and (orientation: landscape) {
-            .budget-table th:nth-child(5),
-            .budget-table td:nth-child(5) {
+            .budget-table th:nth-child(3),
+            .budget-table td:nth-child(3) {
                 display: table-cell;
             }
         }
@@ -2511,6 +2523,11 @@
             floatText = 'Spending savings';
         }
 
+        // Year-end headroom (December closing balance - float threshold)
+        const yearEndRow = rows[rows.length - 1];
+        const yearEndHeadroom = yearEndRow ? yearEndRow.headroom : 0;
+        const floatHeadroomClass = yearEndHeadroom >= 0 ? 'positive' : 'negative';
+
         container.innerHTML = `
             <div class="summary-card">
                 <div class="label"><span>+</span> Total Income</div>
@@ -2521,8 +2538,9 @@
                 <div class="value">${formatValue(totalOutgoings)}</div>
             </div>
             <div class="summary-card ${netClass}">
-                <div class="label"><span>=</span> Net Position</div>
-                <div class="value">${netPosition >= 0 ? '+' : ''}${formatValue(netPosition)}</div>
+                <div class="label"><span>=</span> Position</div>
+                <div class="value"><span class="value-label">net</span> ${netPosition >= 0 ? '+' : ''}${formatValue(netPosition)}</div>
+                <div class="value ${floatHeadroomClass}"><span class="value-label">float</span> ${yearEndHeadroom >= 0 ? '+' : ''}${formatValue(yearEndHeadroom)}</div>
             </div>
             <div class="summary-card ${floatClass}">
                 <div class="label">Float Status</div>
@@ -2847,9 +2865,7 @@
                         <tr>
                             <th>Month</th>
                             <th>Income</th>
-                            <th>Fixed Expenses</th>
-                            <th>Flexible Expenses</th>
-                            <th>Total Assigned</th>
+                            <th>Expenses</th>
                             <th>Available to Budget</th>
                             <th>Closing Balance<small>floor: ${floatFormatted}</small></th>
                             <th>Headroom</th>
@@ -2863,21 +2879,14 @@
                             if (row.isBoundaryRow) rowClass.push('boundary-row');
                             if (row.floatWarning) rowClass.push('float-warning');
 
-                            // Determine cell content with no-data handling
-                            const fixedContent = row.fixedHasData
-                                ? formatCurrency(row.fixedExpenses)
-                                : '<span class="no-data">—</span>';
-                            const flexibleContent = row.flexibleHasData
-                                ? formatCurrency(row.flexibleExpenses)
-                                : '<span class="no-data">—</span>';
+                            // Build expenses tooltip combining fixed and flexible info
+                            const expensesTooltip = `Fixed: ${row.fixedTooltip}\nFlexible: ${row.flexibleTooltip}`;
 
                             return `
                                 <tr class="${rowClass.join(' ')}">
                                     <td>${row.month}</td>
                                     <td title="${row.incomeTooltip}">${formatCurrency(row.income)}</td>
-                                    <td title="${row.fixedTooltip}">${fixedContent}</td>
-                                    <td title="${row.flexibleTooltip}">${flexibleContent}</td>
-                                    <td>${formatCurrency(row.totalAssigned)}</td>
+                                    <td title="${expensesTooltip}">${formatCurrency(row.totalAssigned)}</td>
                                     <td title="${row.availableTooltip}">${formatCurrency(row.availableToBudget)}</td>
                                     <td class="closing-balance ${row.closingBalanceLevel}">${formatCurrency(row.closingBalance)}</td>
                                     <td>${formatHeadroom(row.headroom, row.headroomLevel)}</td>
@@ -2898,15 +2907,13 @@
     // Export table data to CSV and trigger download
     function exportCsv(rows) {
         const currentYear = new Date().getFullYear();
-        const headers = ['Month', 'Income', 'Fixed Expenses', 'Flexible Expenses', 'Total Assigned', 'Available to Budget', 'Closing Balance', 'Headroom'];
+        const headers = ['Month', 'Income', 'Expenses', 'Available to Budget', 'Closing Balance', 'Headroom'];
 
         const csvRows = [
             headers.join(','),
             ...rows.map(row => [
                 row.month,
                 row.income.toFixed(2),
-                row.fixedHasData ? row.fixedExpenses.toFixed(2) : '',
-                row.flexibleHasData ? row.flexibleExpenses.toFixed(2) : '',
                 row.totalAssigned.toFixed(2),
                 row.availableToBudget.toFixed(2),
                 row.closingBalance.toFixed(2),
