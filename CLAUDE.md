@@ -6,9 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Single-file personal annual financial planning tool that integrates with the YNAB (You Need A Budget) API. No build tools, npm, or server required — opens directly in a browser.
 
+Purpose of this tool is to budget many months in advance. YNAB is very limited on its future budgetting functionality. I want to be able to see for instance can I afford a big or a small holiday in September given the future spending commitments I already have. 
+
+
 ## Development
 
 To test changes, open `index.html` directly in a browser. No build step required.
+
+
+## Elements / Concepts
+- Data source - transactions (past and scheduled future) all come from YNAB. E.g.
+    - Future expenses could be car insurance in September, holiday expenses spread out over multiple months (book flights in Feb, book hotel in April, dining out expenses in July)
+    - Future expected income (monthly, extra like bonuses)
+- Transactions are categorized as per YNAB categories 
+- There are fixed and flexible categories:
+    - fixed will be expected to be the same month-per-month
+    - Flexible may have zero for many months, but then a big expense in 5 months time. 
+    - Flexible expenses have an icon at the start of the category name
+- Categories have priorities - p1 -> p5
+    - priority number comes after the flexible icon
+
+
 
 ## Architecture
 
