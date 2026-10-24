@@ -1337,12 +1337,10 @@
         return data.data.accounts;
     }
 
-    // Calculate net worth from accounts (excluding liabilities)
+    // Calculate net worth from accounts: sum of all open account balances.
+    // Liabilities (loans, credit cards) have negative balances and so reduce the total.
     function calculateNetWorth(accounts) {
-        const liabilityTypes = ['loan', 'mortgage', 'lineOfCredit', 'otherLiability'];
-        const eligible = accounts.filter(a =>
-            !a.closed && !a.deleted && !liabilityTypes.includes(a.type)
-        );
+        const eligible = accounts.filter(a => !a.closed && !a.deleted);
         return {
             netWorth: eligible.reduce((sum, a) => sum + a.balance, 0) / 1000,
             accountCount: eligible.length
@@ -1355,6 +1353,31 @@
 
     // Store last fetched data for debugging
     let _debugData = null;
+    let _debugAccounts = null;
+
+    // Call this from browser console: debugNetWorth()
+    // Lists every account with type, flags and balance, and whether it counts towards net worth
+    window.debugNetWorth = function() {
+        if (!_debugAccounts) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+        const rows = _debugAccounts.map(a => ({
+            name: a.name,
+            type: a.type,
+            on_budget: a.on_budget,
+            closed: a.closed,
+            deleted: a.deleted,
+            balance: a.balance / 1000,
+            counted: !a.closed && !a.deleted
+        }));
+        console.table(rows);
+        const sum = (f) => rows.filter(f).reduce((s, r) => s + r.balance, 0);
+        console.log('Net worth (open accounts):', sum(r => r.counted));
+        console.log('On-budget only:', sum(r => r.counted && r.on_budget));
+        console.log('Open assets (positive):', sum(r => r.counted && r.balance > 0));
+        console.log('Open debts (negative):', sum(r => r.counted && r.balance < 0));
+    };
 
     // Call this from browser console: debugMonth('2026-01-01')
     // Shows all categories and their budgeted amounts for a specific month
@@ -3889,6 +3912,7 @@
                 fetchAccountsData(settings)
             ]);
             _debugData = data; // Store for debugging
+            _debugAccounts = accountsData; // Store for debugging
             _transactionsData = data; // Store for transactions tab
             const rows = calculateMonthlyRows(data, settings);
             renderCurrentSection(accountsData);
