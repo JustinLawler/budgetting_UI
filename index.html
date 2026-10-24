@@ -261,6 +261,53 @@
             background: rgba(249, 115, 22, 0.15);
         }
 
+        /* Overview Sections */
+        .overview-section { margin-bottom: 1.5rem; }
+        .overview-table {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border-collapse: collapse;
+        }
+        .overview-table th, .overview-table td {
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid var(--pico-muted-border-color);
+            background: transparent;
+        }
+        .overview-table th {
+            text-align: left;
+            font-weight: 500;
+            color: var(--pico-muted-color);
+        }
+        .overview-table td {
+            text-align: right;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        .overview-table td small {
+            display: block;
+            font-weight: 400;
+            font-size: 0.7rem;
+            color: var(--pico-muted-color);
+        }
+        .overview-table .positive { color: var(--positive-color); }
+        .overview-table .negative, .overview-table .danger { color: var(--negative-color); }
+        .overview-table .caution { color: var(--amber-color); }
+        .overview-table .healthy { color: var(--positive-color); }
+        .section-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--pico-muted-color);
+            margin-bottom: 0.75rem;
+        }
+        .summary-card .subtitle {
+            font-size: 0.7rem;
+            color: var(--pico-muted-color);
+            margin-top: 0.25rem;
+        }
+
         /* Headroom Chart */
         .headroom-chart-container {
             max-width: 800px;
@@ -702,7 +749,11 @@
             .budget-table th:nth-child(3),
             .budget-table td:nth-child(3),
             .budget-table th:nth-child(4),
-            .budget-table td:nth-child(4) {
+            .budget-table td:nth-child(4),
+            .budget-table th:nth-child(5),
+            .budget-table td:nth-child(5),
+            .budget-table th:nth-child(6),
+            .budget-table td:nth-child(6) {
                 display: none;
             }
         }
@@ -957,6 +1008,7 @@
         <nav class="tab-nav" id="tabNav" style="display: none;">
             <button class="active" data-tab="overview">Overview</button>
             <button data-tab="monthly">Monthly</button>
+            <button data-tab="income">Income</button>
             <button data-tab="transactions">Transactions</button>
             <button data-tab="projects">Projects</button>
             <button data-tab="priorities">Priorities</button>
@@ -964,8 +1016,13 @@
 
         <!-- Overview Tab -->
         <div id="tab-overview" class="tab-content active">
-            <!-- Summary Cards (hidden until data loads) -->
-            <div id="summaryCards" class="summary-cards" style="display: none;"></div>
+            <!-- Overview table (Net Worth + Yearly summary) -->
+            <div id="overviewSection" class="overview-section" style="display: none;">
+                <table class="overview-table">
+                    <tbody id="currentRows"></tbody>
+                    <tbody id="summaryRows"></tbody>
+                </table>
+            </div>
 
             <!-- Headroom Chart (hidden until data loads) -->
             <div id="headroomChartContainer" class="headroom-chart-container" style="display: none;"></div>
@@ -988,6 +1045,11 @@
         <!-- Monthly Tab -->
         <div id="tab-monthly" class="tab-content">
             <div id="monthlyTableContainer"></div>
+        </div>
+
+        <!-- Income Tab -->
+        <div id="tab-income" class="tab-content">
+            <div id="incomeTableContainer"></div>
         </div>
 
         <!-- Transactions Tab -->
@@ -1257,12 +1319,65 @@
         };
     }
 
+    // Fetch accounts data for net worth calculation
+    async function fetchAccountsData(settings) {
+        const headers = {
+            'Authorization': `Bearer ${settings.apiToken}`,
+            'Content-Type': 'application/json'
+        };
+        const response = await fetch(
+            `${YNAB_BASE_URL}/budgets/${settings.budgetId}/accounts`,
+            { headers }
+        );
+        if (!response.ok) {
+            const errorData = await response.json();
+            handleApiError(response, errorData);
+        }
+        const data = await response.json();
+        return data.data.accounts;
+    }
+
+    // Calculate net worth from accounts: sum of all open account balances.
+    // Liabilities (loans, credit cards) have negative balances and so reduce the total.
+    function calculateNetWorth(accounts) {
+        const eligible = accounts.filter(a => !a.closed && !a.deleted);
+        return {
+            netWorth: eligible.reduce((sum, a) => sum + a.balance, 0) / 1000,
+            accountCount: eligible.length
+        };
+    }
+
     // ============================================================
     // DEBUG FUNCTIONS (call from browser console)
     // ============================================================
 
     // Store last fetched data for debugging
     let _debugData = null;
+    let _debugAccounts = null;
+
+    // Call this from browser console: debugNetWorth()
+    // Lists every account with type, flags and balance, and whether it counts towards net worth
+    window.debugNetWorth = function() {
+        if (!_debugAccounts) {
+            console.log('No data loaded yet. Click Refresh Data first.');
+            return;
+        }
+        const rows = _debugAccounts.map(a => ({
+            name: a.name,
+            type: a.type,
+            on_budget: a.on_budget,
+            closed: a.closed,
+            deleted: a.deleted,
+            balance: a.balance / 1000,
+            counted: !a.closed && !a.deleted
+        }));
+        console.table(rows);
+        const sum = (f) => rows.filter(f).reduce((s, r) => s + r.balance, 0);
+        console.log('Net worth (open accounts):', sum(r => r.counted));
+        console.log('On-budget only:', sum(r => r.counted && r.on_budget));
+        console.log('Open assets (positive):', sum(r => r.counted && r.balance > 0));
+        console.log('Open debts (negative):', sum(r => r.counted && r.balance < 0));
+    };
 
     // Call this from browser console: debugMonth('2026-01-01')
     // Shows all categories and their budgeted amounts for a specific month
@@ -2480,7 +2595,7 @@
 
     // Render summary cards showing annual totals
     function renderSummaryCards(rows, settings) {
-        const container = document.getElementById('summaryCards');
+        const container = document.getElementById('summaryRows');
 
         // Calculate annual totals
         const totalIncome = rows.reduce((sum, r) => sum + r.income, 0);
@@ -2528,27 +2643,47 @@
         const yearEndHeadroom = yearEndRow ? yearEndRow.headroom : 0;
         const floatHeadroomClass = yearEndHeadroom >= 0 ? 'positive' : 'negative';
 
+        const signed = (v) => `${v >= 0 ? '+' : ''}${formatValue(v)}`;
+
         container.innerHTML = `
-            <div class="summary-card">
-                <div class="label"><span>+</span> Total Income</div>
-                <div class="value">${formatValue(totalIncome)}</div>
-            </div>
-            <div class="summary-card">
-                <div class="label"><span>-</span> Total Outgoings</div>
-                <div class="value">${formatValue(totalOutgoings)}</div>
-            </div>
-            <div class="summary-card ${netClass}">
-                <div class="label"><span>=</span> Position</div>
-                <div class="value"><span class="value-label">net</span> ${netPosition >= 0 ? '+' : ''}${formatValue(netPosition)}</div>
-                <div class="value ${floatHeadroomClass}"><span class="value-label">float</span> ${yearEndHeadroom >= 0 ? '+' : ''}${formatValue(yearEndHeadroom)}</div>
-            </div>
-            <div class="summary-card ${floatClass}">
-                <div class="label">Float Status</div>
-                <div class="value">${floatText}</div>
-            </div>
+            <tr><th>Yearly total income</th><td>${formatValue(totalIncome)}</td></tr>
+            <tr><th>Yearly total outgoings</th><td>${formatValue(totalOutgoings)}</td></tr>
+            <tr>
+                <th>Position</th>
+                <td class="${netClass}">
+                    ${signed(netPosition)} <small>net</small>
+                    <span class="${floatHeadroomClass}">${signed(yearEndHeadroom)} <small>float</small></span>
+                </td>
+            </tr>
+            <tr><th>Float status</th><td class="${floatClass}">${floatText}</td></tr>
         `;
 
-        container.style.display = 'grid';
+        document.getElementById('overviewSection').style.display = 'block';
+    }
+
+    // Render current section (Net Worth) on Overview tab
+    function renderCurrentSection(accounts) {
+        const container = document.getElementById('currentRows');
+
+        if (!accounts || accounts.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        const { netWorth, accountCount } = calculateNetWorth(accounts);
+        const formatValue = (val) => new Intl.NumberFormat('en-IE', {
+            style: 'currency', currency: 'EUR'
+        }).format(val);
+
+        container.innerHTML = `
+            <tr>
+                <th>Net worth</th>
+                <td class="${netWorth >= 0 ? 'positive' : 'negative'}">
+                    ${formatValue(netWorth)}
+                    <small>${accountCount} account${accountCount !== 1 ? 's' : ''}</small>
+                </td>
+            </tr>
+        `;
     }
 
     // Render headroom chart on Overview tab
@@ -2866,6 +3001,8 @@
                             <th>Month</th>
                             <th>Income</th>
                             <th>Expenses</th>
+                            <th>Fixed</th>
+                            <th>Additional</th>
                             <th>Available to Budget</th>
                             <th>Closing Balance<small>floor: ${floatFormatted}</small></th>
                             <th>Headroom</th>
@@ -2887,6 +3024,8 @@
                                     <td>${row.month}</td>
                                     <td title="${row.incomeTooltip}">${formatCurrency(row.income)}</td>
                                     <td title="${expensesTooltip}">${formatCurrency(row.totalAssigned)}</td>
+                                    <td title="${row.fixedTooltip}">${formatCurrency(row.fixedExpenses)}</td>
+                                    <td title="${row.flexibleTooltip}">${formatCurrency(row.flexibleExpenses)}</td>
                                     <td title="${row.availableTooltip}">${formatCurrency(row.availableToBudget)}</td>
                                     <td class="closing-balance ${row.closingBalanceLevel}">${formatCurrency(row.closingBalance)}</td>
                                     <td>${formatHeadroom(row.headroom, row.headroomLevel)}</td>
@@ -2907,7 +3046,7 @@
     // Export table data to CSV and trigger download
     function exportCsv(rows) {
         const currentYear = new Date().getFullYear();
-        const headers = ['Month', 'Income', 'Expenses', 'Available to Budget', 'Closing Balance', 'Headroom'];
+        const headers = ['Month', 'Income', 'Expenses', 'Fixed', 'Additional', 'Available to Budget', 'Closing Balance', 'Headroom'];
 
         const csvRows = [
             headers.join(','),
@@ -2915,6 +3054,8 @@
                 row.month,
                 row.income.toFixed(2),
                 row.totalAssigned.toFixed(2),
+                row.fixedExpenses.toFixed(2),
+                row.flexibleExpenses.toFixed(2),
                 row.availableToBudget.toFixed(2),
                 row.closingBalance.toFixed(2),
                 row.headroom.toFixed(2)
@@ -2945,6 +3086,85 @@
     }
 
     // Render warnings panel for unsupported scheduled transaction frequencies
+    // Income tab: yearly income totals per source (payee), using the same
+    // rules as the income column in calculateMonthlyRows
+    function renderIncomeTab(data) {
+        const container = document.getElementById('incomeTableContainer');
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonthIndex = today.getMonth();
+        const todayDay = today.getDate();
+        const INCOME_CATEGORY = 'Inflow: Ready to Assign';
+
+        const { expanded } = expandScheduledTransactions(data.scheduledTransactions, currentYear);
+        const sources = new Map();
+        const add = (payee, field, amount) => {
+            const name = payee || '(no payee)';
+            if (!sources.has(name)) sources.set(name, { actual: 0, scheduled: 0 });
+            sources.get(name)[field] += amount / 1000;
+        };
+
+        // Actual income received this year (past months + current month so far)
+        (data.transactions || []).forEach(t => {
+            const d = new Date(t.date);
+            if (d.getFullYear() !== currentYear || d.getMonth() > currentMonthIndex) return;
+            if (t.amount > 0 && t.category_name === INCOME_CATEGORY) add(t.payee_name, 'actual', t.amount);
+        });
+
+        // Scheduled income: rest of current month plus future months
+        expanded.forEach(t => {
+            if (t.occurrence_year !== currentYear || t.occurrence_month < currentMonthIndex) return;
+            if (t.amount <= 0 || t.category_name !== INCOME_CATEGORY) return;
+            if (t.occurrence_month === currentMonthIndex && new Date(t.date_next).getDate() < todayDay) return;
+            add(t.payee_name, 'scheduled', t.amount);
+        });
+
+        const list = [...sources.entries()]
+            .map(([name, v]) => ({ name, ...v, total: v.actual + v.scheduled }))
+            .sort((a, b) => b.total - a.total);
+
+        if (list.length === 0) {
+            container.innerHTML = '<p class="empty-state">No income found for this year.</p>';
+            return;
+        }
+
+        const sum = key => list.reduce((acc, r) => acc + r[key], 0);
+        const escapeHtml = str => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        container.innerHTML = `
+            <div class="budget-table-wrapper">
+                <table class="budget-table">
+                    <thead>
+                        <tr>
+                            <th>Source</th>
+                            <th>Received</th>
+                            <th>Scheduled</th>
+                            <th>Year Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${list.map(r => `
+                            <tr>
+                                <td>${escapeHtml(r.name)}</td>
+                                <td>${formatCurrency(r.actual)}</td>
+                                <td>${formatCurrency(r.scheduled)}</td>
+                                <td>${formatCurrency(r.total)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td><strong>Total</strong></td>
+                            <td><strong>${formatCurrency(sum('actual'))}</strong></td>
+                            <td><strong>${formatCurrency(sum('scheduled'))}</strong></td>
+                            <td><strong>${formatCurrency(sum('total'))}</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        `;
+    }
+
     function renderWarnings(warnings) {
         const panel = document.getElementById('warningsPanel');
 
@@ -3687,10 +3907,15 @@
         document.getElementById('refreshBtn').disabled = true;
 
         try {
-            const data = await fetchYnabData(settings);
+            const [data, accountsData] = await Promise.all([
+                fetchYnabData(settings),
+                fetchAccountsData(settings)
+            ]);
             _debugData = data; // Store for debugging
+            _debugAccounts = accountsData; // Store for debugging
             _transactionsData = data; // Store for transactions tab
             const rows = calculateMonthlyRows(data, settings);
+            renderCurrentSection(accountsData);
             renderSummaryCards(rows, settings);
             renderHeadroomChart(rows, settings);
             renderWarnings(data._warnings);
@@ -3701,6 +3926,8 @@
             const txMonthSelect = document.getElementById('transactionsMonth');
             const txMonthIndex = parseInt(txMonthSelect.value, 10);
             renderTransactions(data, settings, txMonthIndex);
+
+            renderIncomeTab(data);
 
             // Render projects tab
             renderProjectsTab(data, settings);
